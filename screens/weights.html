@@ -1,0 +1,57 @@
+<section id="screen-weights" class="screen">
+    <header class="screen-header">
+        <button id="backToProducts" class="pill small">Back</button>
+        <h1>ENTER TARE:</h1>
+    </header>
+    <div class="weights-layout">
+        <div class="form">
+            <label
+                >NET WEIGHT (LBS.)
+                <input
+                    type="number"
+                    inputmode="decimal"
+                    id="netWeight"
+                    placeholder="0"
+                />
+            </label>
+            <label
+                >GROSS WEIGHT (LBS.)
+                <input
+                    type="number"
+                    inputmode="decimal"
+                    id="grossWeight"
+                    placeholder="0"
+                />
+            </label>
+            <label
+                >TARE WEIGHT (LBS.)
+                <input
+                    type="number"
+                    inputmode="decimal"
+                    id="tareWeight"
+                    placeholder="0"
+                    disabled
+                />
+            </label>
+            <div
+                id="weightsError"
+                class="form-error"
+                role="alert"
+                aria-live="polite"
+            ></div>
+            <div class="row">
+                <button id="clearWeights" class="btn secondary">Clear</button>
+                <div class="spacer"></div>
+                <button id="previewBtn" class="btn primary">Preview</button>
+            </div>
+        </div>
+        <div class="keypad" aria-label="Keypad">
+            <div class="keys">
+                <button>1</button><button>2</button><button>3</button>
+                <button>4</button><button>5</button><button>6</button>
+                <button>7</button><button>8</button><button>9</button>
+                <button>0</button><button>.</button><button>⌫</button>
+            </div>
+        </div>
+    </div>
+</section>

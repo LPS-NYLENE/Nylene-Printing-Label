@@ -1,0 +1,9 @@
+{
+    "rules": {
+        ".read": false,
+        "prints": {
+            ".read": false,
+            ".write": true
+        }
+    }
+}

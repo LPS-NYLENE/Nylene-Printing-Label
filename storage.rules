@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Optional: Lock down by default; signed URLs still work.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    // Allow reads of exported Excel only to authenticated users if accessed via SDK (not via signed URL)
+    match /exports/{file} {
+      allow read: if request.auth != null;
+    }
+  }
+}

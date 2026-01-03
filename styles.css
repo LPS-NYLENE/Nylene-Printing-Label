@@ -1,0 +1,424 @@
+:root {
+    --bg: #cfe9e5;
+    --card: #e8f4f2;
+    --text: #0f1b1a;
+    --muted: #3b4b49;
+    --primary: #0b7a75;
+    --primary-ink: #ffffff;
+    --secondary: #e7edf0;
+    --tertiary: #f2f7f9;
+    --focus: #0aa1a1;
+}
+
+* {
+    box-sizing: border-box;
+}
+html,
+body {
+    height: 100%;
+}
+body {
+    margin: 0;
+    font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial,
+        sans-serif;
+    color: var(--text);
+    background: var(--bg);
+}
+
+#app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.screen {
+    display: none;
+}
+.screen.active {
+    display: block;
+}
+
+.screen-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.auth-logo {
+    text-align: center;
+}
+.screen-header h1 {
+    margin: 0 auto 0 0;
+    letter-spacing: 1px;
+}
+.muted-text {
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.grid {
+    display: grid;
+    gap: 24px;
+}
+.grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+.card h2 {
+    margin: 4px 0 12px;
+    letter-spacing: 0.5px;
+}
+
+.btn-col {
+    display: grid;
+    gap: 12px;
+}
+
+.btn,
+.pill {
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+.btn.option {
+    background: #fff;
+}
+.btn.primary {
+    background: var(--primary);
+    color: var(--primary-ink);
+}
+.btn.secondary {
+    background: var(--secondary);
+}
+.btn.tertiary {
+    background: var(--tertiary);
+}
+.btn:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+.btn.selected {
+    box-shadow: 0 0 0 3px var(--focus) inset;
+}
+
+.pill.small {
+    font-size: 12px;
+    padding: 6px 10px;
+    background: #fff;
+}
+
+.screen-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 24px;
+}
+.spacer {
+    flex: 1;
+}
+.right-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+/* Basic modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 1000;
+}
+
+.coperion-password {
+    padding-left: 250px;
+}
+.modal {
+    background: #fff;
+    border-radius: 10px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+    padding-left: 30px;
+    padding-right: 30px;
+
+    /* Ensure enough room for a 3-column grid insie */
+    width: min(720px, 90vw);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.hidden {
+    display: none !important;
+}
+
+/* Product list */
+.product-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+}
+.product-list .product-btn {
+    background: #fff;
+}
+
+/* Scrollable container for large product sets inside modals */
+.product-list-wrap {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 6px; /* keep scrollbar from overlaying content */
+}
+
+/* Force a 3-column grid inside modals */
+.modal .product-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Make product buttons fill their grid cell width inside modals */
+.modal .product-list .product-btn {
+    width: 100%;
+}
+
+.weights-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: start;
+}
+.form-error {
+    color: #c62828;
+    font-size: 14px;
+    font-weight: 600;
+    min-height: 18px;
+}
+.form {
+    display: grid;
+    gap: 16px;
+}
+.form label {
+    display: grid;
+    gap: 8px;
+    font-weight: 600;
+}
+.form input {
+    padding: 14px 12px;
+    border-radius: 8px;
+    border: 1px solid #c7d3d1;
+    font-size: 20px;
+}
+.row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.keypad {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 12px;
+}
+.keys {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.keys button {
+    padding: 16px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 8px;
+    border: 0;
+    background: #fff;
+    cursor: pointer;
+}
+
+.preview-layout {
+    display: grid;
+    grid-template-columns: 1fr 180px;
+    gap: 24px;
+}
+.preview-actions {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+}
+
+/* Label canvas approximating 4x6 aspect */
+.label-canvas {
+    background: #fff;
+    border-radius: 6px;
+    padding: 10px;
+    color: #000;
+    width: 100%;
+    height: 600px;
+    /* display: grid; */
+    /* grid-template-columns: 1fr 140px; */
+    gap: 10px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.08);
+}
+
+/* Right-side vertical barcode column */
+.label-barcode-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+.label-barcode-col svg {
+    transform: rotate(90deg);
+    transform-origin: center;
+    width: 560px;
+    height: 120px;
+}
+
+.label-header {
+    display: flex;
+    flex-direction: column; /* stack items top → bottom */
+    align-items: flex-start; /* keep them left-aligned */
+    margin-bottom: 15px;
+}
+
+.label-header img {
+    margin-bottom: 5px; /* small gap  logxt */
+}
+.label-header .made {
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.big-code {
+    font-size: 70px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-align: left;
+    width: 1px;
+}
+.label-left {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.weights {
+    /* display: flex; */
+    flex-direction: column;
+    align-items: baseline;
+    text-align: end;
+    margin-top: 140px;
+}
+
+.label-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* left column + right column */
+    gap: 20px;
+    align-items: start;
+}
+
+.label-logo {
+    display: flex;
+    flex-direction: column; /* stack logo and text */
+    align-items: flex-start; /* keep them left-aligned */
+    margin-bottom: 15px;
+}
+
+.label-logo img {
+    margin-bottom: 4px; /* little gap between logo andtext */
+}
+
+.w-titles {
+    font-size: 20px;
+    font-weight: 100;
+    letter-spacing: 1px;
+}
+.box-title {
+    margin-top: 35px;
+}
+.w-values {
+    font-size: 24px;
+    font-weight: 600;
+    padding-bottom: 20px;
+}
+.footer-row {
+    display: flex;
+    grid-template-columns: 1fr auto 420px;
+    align-items: left;
+    gap: 6px;
+}
+.unit {
+    font-size: 14px;
+}
+.unit span {
+    font-size: 60px;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+.material {
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+.material #sourceChosen {
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.box-number {
+    font-size: larger;
+}
+
+/* Print styles: hide chrome, fit label to page */
+@media print {
+    @page {
+        size: 8in 5in;
+        margin: 0;
+    }
+    html,
+    body {
+        height: auto;
+        background: #fff;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    #app {
+        padding: 0;
+    }
+    .screen {
+        display: none !important;
+    }
+    #screen-preview {
+        display: block !important;
+    }
+    .screen-header,
+    .preview-actions {
+        display: none !important;
+    }
+    .preview-layout {
+        display: block;
+    }
+    .label-canvas {
+        width: 8in;
+        height: 5in;
+        margin: 0 auto;
+        box-shadow: none;
+    }
+
+    /* Show the duplicated copy only during print and force a page break
+       so we always get two separate labels per print job */
+    .label-canvas[data-print-duplicate="true"] {
+        display: block !important;
+        break-before: page;
+        page-break-before: always;
+    }
+}

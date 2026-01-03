@@ -1,0 +1,61 @@
+<section id="screen-products" class="screen">
+    <header class="screen-header">
+        <button id="backToSource" class="pill small">Back</button>
+        <h1>SELECT PRODUCT:</h1>
+    </header>
+    <div id="productMeta" class="muted-text"></div>
+    <div class="muted-text">Only one product is shown by default.</div>
+    <div id="productList" class="product-list"></div>
+    <footer class="screen-footer">
+        <div class="spacer"></div>
+        <button id="btnPrChangeProducts" class="btn tertiary">
+            Change products
+        </button>
+        <button id="btnProceedWeights" class="btn primary" disabled>
+            Continue
+        </button>
+    </footer>
+
+    <!-- Password-gated product change moda (P&R) -->
+    <div id="prModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <div id="prModalStagePassword">
+                <div class="coperion-password">
+                    <h3>Enter password</h3>
+                    <input
+                        id="prPassword"
+                        type="password"
+                        placeholder="Password"
+                        style="padding: 10px"
+                    />
+                    <div class="row" style="margin-top: 12px">
+                        <button id="prCancel" class="btn secondary">
+                            Cancel
+                        </button>
+                        <button id="prUnlock" class="btn primary">
+                            Unlock
+                        </button>
+                    </div>
+                </div>
+                <div
+                    id="prError"
+                    class="muted-text"
+                    style="color: #b00020; margin-top: 8px"
+                ></div>
+            </div>
+            <div id="prModalStageProducts" class="hidden">
+                <h3>Choose product</h3>
+                <div class="product-list-wrap">
+                    <div id="prProductChoices" class="product-list"></div>
+                </div>
+                <div class="row" style="margin-top: 12px">
+                    <button id="prCancelProducts" class="btn secondary">
+                        Cancel
+                    </button>
+                    <div class="spacer"></div>
+                    <button id="prDone" class="btn primary">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

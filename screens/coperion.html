@@ -1,0 +1,59 @@
+<section id="screen-coperion" class="screen">
+    <header class="screen-header">
+        <h1>Extrusion</h1>
+    </header>
+    <div class="muted-text">Only one product is shown by default</div>
+    <div id="coperionProductContainer" class="product-list"></div>
+    <footer class="screen-footer">
+        <button id="btnLogoutCoperion" class="btn tertiary">Log out</button>
+        <div class="spacer"></div>
+        <button id="btnChangeProducts" class="btn tertiary">
+            Change products
+        </button>
+        <button id="btnProceedWeightsCoperion" class="btn primary">
+            Continue
+        </button>
+    </footer>
+
+    <div id="coperionModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <div id="coperionModalStagePassword">
+                <div class="coperion-password">
+                    <h3>Enter password</h3>
+                    <input
+                        id="coperionPassword"
+                        type="password"
+                        placeholder="Password"
+                        style="padding: 10px"
+                    />
+                    <div class="row" style="margin-top: 12px">
+                        <button id="coperionCancel" class="btn secondary">
+                            Cancel
+                        </button>
+                        <button id="coperionUnlock" class="btn primary">
+                            Unlock
+                        </button>
+                    </div>
+                </div>
+                <div
+                    id="coperionError"
+                    class="muted-text"
+                    style="color: #b00020; margin-top: 8px"
+                ></div>
+            </div>
+            <div id="coperionModalStageProducts" class="hidden">
+                <h3>Choose product</h3>
+                <div class="product-list-wrap">
+                    <div id="coperionProductChoices" class="product-list"></div>
+                </div>
+                <div class="row" style="margin-top: 12px">
+                    <button id="coperionCancelProducts" class="btn secondary">
+                        Cancel
+                    </button>
+                    <div class="spacer"></div>
+                    <button id="coperionDone" class="btn primary">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

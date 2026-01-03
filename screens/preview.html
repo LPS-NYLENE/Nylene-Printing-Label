@@ -1,0 +1,86 @@
+<section id="screen-preview" class="screen active">
+    <header class="screen-header">
+        <button id="backToWeights" class="pill small">Modify</button>
+        <h1>PRINT PREVIEW</h1>
+    </header>
+
+    <div class="preview-layout">
+        <div class="label-canvas" id="labelCanvas">
+            <div class="label-main">
+                <!-- LEFT SIDE -->
+                <div class="label-left">
+                    <div class="label-logo">
+                        <img
+                            class="logo"
+                            alt="Logo"
+                            width="20%"
+                            height="20%"
+                            src="https://nylene.com/wp-content/uploads/2023/03/NYLENE-LOGO-Web.svg"
+                        />
+                        <div class="made">
+                            PACKAGED/EMBALLÉ ON <span id="pkgDate"></span><br />
+                            MADE IN CANADA - FABRIQUÉ AU CANADA
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>
+                            <div class="w-title box-titles">
+                                PRODUCT / PRODUIT
+                            </div>
+                            <div class="big-code">
+                                <span id="productName">—</span><br />
+                            </div>
+                        </div>
+                        <div class="w-title box-title">
+                            BOX NUMBER / NUMÉRO DE BOÎTE
+                        </div>
+                        <div
+                            class="big-code"
+                            style="margin-bottom: 10px"
+                            id="bigCode"
+                        ></div>
+
+                        <div class="labelBarcodee" style="margin-top: 8px">
+                            <svg id="labelBarcode"></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT SIDE -->
+                <div class="weights">
+                    <div style="margin-top: 100px">
+                        <div class="w-title">GROSS WT / POIDS BRUT</div>
+                        <div class="w-values">
+                            <span id="grossKg">0.0</span> KGS
+                            <span id="grossLb">0.0</span> LBS
+                        </div>
+                    </div>
+                    <div>
+                        <div class="w-title">NET WT / POIDS NET</div>
+                        <div class="w-values">
+                            <span id="netKg">0.0</span> KGS
+                            <span id="netLb">0.0</span> LBS
+                        </div>
+                    </div>
+                    <div>
+                        <div class="w-title">TARE WT / POIDS DE TARE</div>
+                        <div class="w-values">
+                            <span id="tareKg">0.0</span> KGS
+                            <span id="tareLb">0.0</span> LBS
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-row">
+                <div class="material"></div>
+            </div>
+        </div>
+
+        <div class="preview-actions">
+            <button id="printBtn" class="btn primary">Print</button>
+            <button id="clearPreview" class="btn secondary">Clear</button>
+        </div>
+    </div>
+</section>
