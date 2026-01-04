@@ -5,6 +5,9 @@ import {
     savePrintToFirebase,
     fetchAllPrintsFromFirebase,
 } from "./firebase-db.js";
+import { getAppInstance } from "./firebase-db.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { applyExcelButtonAccess, isExcelExportAllowed } from "./access.js";
 
 const LOGS_KEY = "print_logs_v1";
 
@@ -120,8 +123,26 @@ function mergeByTimestamp(existingRows, newRows) {
 export function bindExcelButton() {
     const excelBtn = document.getElementById("excelBtn");
     if (!excelBtn) return;
+
+    // Ensure the button is hidden/disabled appropriately on first bind.
+    try {
+        const auth = getAuth(getAppInstance());
+        applyExcelButtonAccess(auth.currentUser);
+    } catch {
+        // If auth isn't available for any reason, default to locked down.
+        applyExcelButtonAccess(null);
+    }
+
     excelBtn.addEventListener("click", async () => {
         try {
+            // Safety check: enforce access even if DOM is modified.
+            const auth = getAuth(getAppInstance());
+            if (!isExcelExportAllowed(auth.currentUser)) {
+                // Keep this quiet other than a simple message.
+                alert("Not authorized to export Excel.");
+                return;
+            }
+
             // Always fetch from Firebase and download an Excel immediately
             const firebaseLogs = await fetchAllPrintsFromFirebase();
             const rows = firebaseLogs.map(formatForMasExcel);

@@ -14,6 +14,7 @@ import { initPreviewStep } from "./steps/preview.js";
 import { initLabelDatabaseStep } from "./steps/labeldatabase.js";
 import { initCoperionStep } from "./steps/coperion.js";
 import { initAuthStep } from "./steps/auth.js";
+import { applyExcelButtonAccess } from "./access.js";
 
 async function loadFragment(path) {
     const res = await fetch(path, { cache: "no-store" });
@@ -80,6 +81,8 @@ function setupAuthLifecycle() {
     setPersistence(auth, browserLocalPersistence).catch(() => {});
 
     onAuthStateChanged(auth, (user) => {
+        // Update UI access controls for privileged actions.
+        applyExcelButtonAccess(user);
         if (user) {
             routeAfterLogin();
         } else {
