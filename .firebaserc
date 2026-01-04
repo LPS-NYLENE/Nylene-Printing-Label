@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "nylene-label-printer"
-  }
+    "default": "nylene-lps",
+    "nylene-lps": "nylene-lps"
+  },
+  "targets": {},
+  "etags": {}
 }
