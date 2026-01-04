@@ -34,8 +34,12 @@ export async function savePrintToFirebase(record) {
     const app = getAppInstance();
     const db = getDatabase(app);
 
+    // Use LOCAL day key (YYYY-MM-DD) so Firebase buckets match the operator's "today".
+    // Note: timestamp remains ISO/UTC; only the bucket key is localized.
     const iso = record && record.timestamp ? record.timestamp : new Date().toISOString();
-    const day = iso.slice(0, 10); // YYYY-MM-DD
+    const when = parseIsoDateOrNow(iso);
+    const effective = apply0001Rule(when);
+    const day = formatLocalDayKey(effective); // YYYY-MM-DD (local)
     const printsRef = ref(db, `prints/${day}`);
 
     const payload = {
@@ -78,7 +82,9 @@ export async function fetchAllPrintsFromFirebase() {
 }
 
 // Compute the next daily sequence (last three digits) for a given date
-// by inspecting existing prints for that UTC day in Realtime Database.
+// by inspecting existing prints for that day in Realtime Database.
+// Buckets were historically stored under UTC day keys; we now store under local
+// day keys. For backward compatibility, we read both local and UTC buckets.
 // Returns 1 if no prior prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
   const app = getAppInstance();
@@ -101,12 +107,16 @@ export async function getNextDailySequenceFromFirebase(date) {
   const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
   const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
 
-  // Determine which UTC day buckets to read (at most two, sometimes one)
+  // Determine which buckets to read:
+  // - local day key (new writes)
+  // - UTC day keys spanning this local day (legacy writes / timezone edge)
   const dayKeys = new Set();
-  const startKey = start.toISOString().slice(0, 10);
-  const endKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(startKey);
-  dayKeys.add(endKey);
+  const localKey = formatLocalDayKey(start);
+  const startUtcKey = start.toISOString().slice(0, 10);
+  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+  dayKeys.add(localKey);
+  dayKeys.add(startUtcKey);
+  dayKeys.add(endUtcKey);
 
   const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
   const snaps = await Promise.all(refs.map((r) => get(r)));
@@ -192,12 +202,16 @@ export async function getNextCoperionSequenceFromFirebase(date) {
   const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
   const prefix = `EA1${yearDigit}${doyStr}`;
 
-  // Determine which UTC day buckets to read (at most two, sometimes one)
+  // Determine which buckets to read:
+  // - local day key (new writes)
+  // - UTC day keys spanning this local day (legacy writes / timezone edge)
   const dayKeys = new Set();
-  const startKey = start.toISOString().slice(0, 10);
-  const endKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(startKey);
-  dayKeys.add(endKey);
+  const localKey = formatLocalDayKey(start);
+  const startUtcKey = start.toISOString().slice(0, 10);
+  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+  dayKeys.add(localKey);
+  dayKeys.add(startUtcKey);
+  dayKeys.add(endUtcKey);
 
   const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
   const snaps = await Promise.all(refs.map((r) => get(r)));
@@ -240,4 +254,28 @@ export async function getNextCoperionSequenceFromFirebase(date) {
   }
   // First of day -> 401, then 402, ... (capped at 999)
   return Math.min(999, 401 + count);
+}
+
+function parseIsoDateOrNow(value) {
+  const d = new Date(value);
+  return Number.isFinite(d.getTime()) ? d : new Date();
+}
+
+// For times between 00:00 and 00:01 (exclusive), treat as previous day.
+// Matches the "00:01 rule" used in unit number generation.
+function apply0001Rule(date) {
+  const d = new Date(date);
+  const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
+  if (minutesSinceMidnight < 1) {
+    d.setMinutes(d.getMinutes() - 1);
+  }
+  return d;
+}
+
+function formatLocalDayKey(date) {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
