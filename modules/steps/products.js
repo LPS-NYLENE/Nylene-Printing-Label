@@ -51,22 +51,8 @@ export function initProductsStep() {
     if (back) back.addEventListener("click", () => showScreen("source"));
 
     const proceed = document.getElementById("btnProceedWeights");
-    const productsErrorEl = document.getElementById("productsError");
     if (proceed) {
         proceed.addEventListener("click", () => {
-            // Guard against BLANK being the active selection (represented as null/empty).
-            const active = isTwoSlotProductContext(state.activeGroup)
-                ? getActiveProductFromSlots(
-                      state.productSlots,
-                      state.activeProductSlot
-                  )
-                : state.productSlots.primary;
-            if (!active) {
-                if (productsErrorEl)
-                    productsErrorEl.textContent =
-                        "select a product that is not BLANK";
-                return;
-            }
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
             const gross = document.getElementById("grossWeight");
@@ -81,7 +67,6 @@ export function initProductsStep() {
     const stageChoices = document.getElementById("prModalStageProducts");
     const pwdInput = document.getElementById("prPassword");
     const errorEl = document.getElementById("prError");
-    const productsModalErrorEl = document.getElementById("prProductsError");
     const unlockBtn = document.getElementById("prUnlock");
     const cancelBtn = document.getElementById("prCancel");
     const doneBtn = document.getElementById("prDone");
@@ -182,7 +167,6 @@ export function initProductsStep() {
     }
 
     function renderProducts() {
-        if (productsErrorEl) productsErrorEl.textContent = "";
         if (isTwoSlotProductContext(state.activeGroup)) {
             renderTwoSlotProducts();
         } else {
@@ -196,7 +180,6 @@ export function initProductsStep() {
         if (stagePwd) stagePwd.classList.remove("hidden");
         if (stageChoices) stageChoices.classList.add("hidden");
         if (errorEl) errorEl.textContent = "";
-        if (productsModalErrorEl) productsModalErrorEl.textContent = "";
         if (pwdInput) {
             pwdInput.value = "";
             pwdInput.focus();
@@ -209,7 +192,6 @@ export function initProductsStep() {
     function showChoices() {
         if (stagePwd) stagePwd.classList.add("hidden");
         if (stageChoices) stageChoices.classList.remove("hidden");
-        if (productsModalErrorEl) productsModalErrorEl.textContent = "";
         if (!choicesEl) return;
         choicesEl.innerHTML = "";
 
@@ -248,9 +230,7 @@ export function initProductsStep() {
                 }
 
                 if (activeSlot === "primary" && isBlank) {
-                    if (productsModalErrorEl)
-                        productsModalErrorEl.textContent =
-                            "select a product that is not BLANK";
+                    alert("Primary slot cannot be BLANK.");
                     // Restore selection highlight to current value
                     showChoices();
                     return;
@@ -283,16 +263,6 @@ export function initProductsStep() {
         });
     if (doneBtn)
         doneBtn.addEventListener("click", () => {
-            const active = getActiveProductFromSlots(
-                state.productSlots,
-                state.activeProductSlot
-            );
-            if (!active) {
-                if (productsModalErrorEl)
-                    productsModalErrorEl.textContent =
-                        "select a product that is not BLANK";
-                return;
-            }
             closeModal();
             renderProducts();
         });
