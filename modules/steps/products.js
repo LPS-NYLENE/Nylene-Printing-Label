@@ -53,6 +53,16 @@ export function initProductsStep() {
     const proceed = document.getElementById("btnProceedWeights");
     if (proceed) {
         proceed.addEventListener("click", () => {
+            const activeProduct = isTwoSlotProductContext(state.activeGroup)
+                ? getActiveProductFromSlots(
+                      state.productSlots,
+                      state.activeProductSlot
+                  )
+                : state.productSlots.primary;
+            if (!activeProduct) {
+                alert("Select another product that is not BLANK");
+                return;
+            }
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
             const gross = document.getElementById("grossWeight");
