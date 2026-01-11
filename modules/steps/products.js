@@ -251,7 +251,7 @@ export function initProductsStep() {
                     if (productsModalErrorEl)
                         productsModalErrorEl.textContent =
                             "select a product that is not BLANK";
-                    // Restore selection highlight to current value
+                    // Restore selection highlight to current valu
                     showChoices();
                     return;
                 }
