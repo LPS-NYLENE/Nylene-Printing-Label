@@ -61,10 +61,24 @@ export function initProductsStep() {
                       state.activeProductSlot
                   )
                 : state.productSlots.primary;
+
+            // If Secondary is selected and is BLANK, block with an inline error under Continue.
+            if (
+                isTwoSlotProductContext(state.activeGroup) &&
+                state.activeProductSlot === "secondary" &&
+                !active
+            ) {
+                if (productsErrorEl)
+                    productsErrorEl.textContent =
+                        "Select another product that is not BLANK";
+                return;
+            }
+
+            // Safety: if active slot is BLANK for any reason, don't proceed.
             if (!active) {
                 if (productsErrorEl)
                     productsErrorEl.textContent =
-                        "select a product that is not BLANK";
+                        "Select another product that is not BLANK";
                 return;
             }
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
@@ -164,6 +178,7 @@ export function initProductsStep() {
                 isPrimary ? "Primary" : "Secondary"
             }: ${formatProductForDisplay(value)}`;
             btn.addEventListener("click", () => {
+                if (productsErrorEl) productsErrorEl.textContent = "";
                 state.activeProductSlot = slot;
                 syncBigCodeToActiveSlot();
                 renderTwoSlotProducts();
@@ -174,11 +189,9 @@ export function initProductsStep() {
         listEl.appendChild(makeSlotButton("primary"));
         listEl.appendChild(makeSlotButton("secondary"));
 
-        const active = getActiveProductFromSlots(
-            state.productSlots,
-            state.activeProductSlot
-        );
-        setProceedEnabled(!!active);
+        // Keep Continue enabled as long as Primary is a real product.
+        // If Secondary is selected but BLANK, the Continue click handler will show an error.
+        setProceedEnabled(!!state.productSlots.primary);
     }
 
     function renderProducts() {
