@@ -11,7 +11,7 @@ import {
     BLANK_PRODUCT_LABEL,
 } from "../state.js";
 
-// Default fallback when no prior selection exists for a contextt
+// Default fallback when no prior selection exists for a context
 const PR_DEFAULT_PRODUCT = "CSDN-INT";
 
 // Allowed products for P&R (from provided list )
