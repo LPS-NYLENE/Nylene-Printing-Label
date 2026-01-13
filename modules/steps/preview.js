@@ -2,6 +2,7 @@ import { state, showScreen } from "../state.js";
 import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
+    generateCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
 
@@ -139,9 +140,7 @@ export function initPreviewStep() {
             state.reprintAvailable = true;
             // Prepare next displayed number by reading from Firebase
             try {
-                const next = state.isCoperion
-                    ? await generateCoperionUnitNumberFromFirebase()
-                    : await generateUnitNumberFromFirebase(group, letter);
+                const next = await getNextUnitNumberForPreview(group, letter);
                 state.unitNumber = next;
             } catch (e) {
                 console.warn(
@@ -211,15 +210,27 @@ export function initPreviewStep() {
         try {
             const group = state.activeGroup;
             const letter = group ? state.source[group] : undefined;
-            const next = state.isCoperion
-                ? await generateCoperionUnitNumberFromFirebase()
-                : await generateUnitNumberFromFirebase(group, letter);
+            const next = await getNextUnitNumberForPreview(group, letter);
             state.unitNumber = next;
             updatePreview();
         } catch (e) {
             console.warn("Initial Firebase unit number fetch failed", e);
         }
     })();
+
+    function isCompoundBagsContext(activeGroup, productCode) {
+        const group = String(activeGroup || "").toLowerCase();
+        if (group !== "compound") return false;
+        const code = String(productCode || "").trim().toLowerCase();
+        return code.endsWith("bags");
+    }
+
+    async function getNextUnitNumberForPreview(group, letter) {
+        if (state.isCoperion) return await generateCoperionUnitNumberFromFirebase();
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await generateCompoundBagsUnitNumberFromFirebase(group, letter);
+        return await generateUnitNumberFromFirebase(group, letter);
+    }
 
     function updatePreview() {
         const now = state.previewTimestamp
