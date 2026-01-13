@@ -1,7 +1,6 @@
 import { state, showScreen } from "../state.js";
 import {
     generateUnitNumberFromFirebase,
-    generateBagsUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
@@ -27,10 +26,6 @@ export function initPreviewStep() {
     function getDesiredPrintCopies() {
         const code = String(state.bigCode || "");
         return code.toLowerCase().includes("bags") ? 4 : 2;
-    }
-
-    function isBagsProduct() {
-        return String(state.bigCode || "").toLowerCase().includes("bags");
     }
 
     // Prepare DOM to print N copies by cloning the label canvas. Extra copies
@@ -146,9 +141,7 @@ export function initPreviewStep() {
             try {
                 const next = state.isCoperion
                     ? await generateCoperionUnitNumberFromFirebase()
-                    : isBagsProduct()
-                      ? await generateBagsUnitNumberFromFirebase(group, letter)
-                      : await generateUnitNumberFromFirebase(group, letter);
+                    : await generateUnitNumberFromFirebase(group, letter);
                 state.unitNumber = next;
             } catch (e) {
                 console.warn(
@@ -220,9 +213,7 @@ export function initPreviewStep() {
             const letter = group ? state.source[group] : undefined;
             const next = state.isCoperion
                 ? await generateCoperionUnitNumberFromFirebase()
-                : isBagsProduct()
-                  ? await generateBagsUnitNumberFromFirebase(group, letter)
-                  : await generateUnitNumberFromFirebase(group, letter);
+                : await generateUnitNumberFromFirebase(group, letter);
             state.unitNumber = next;
             updatePreview();
         } catch (e) {

@@ -122,7 +122,6 @@ export async function getNextDailySequenceFromFirebase(date) {
   const snaps = await Promise.all(refs.map((r) => get(r)));
 
   // For P&R: ignore any Coperion records (identified by explicit productLine or EA prefix)
-  // Also ignore BAGS records because they use a separate 201..999 range.
   let maxSuffix = 0;
   let anyParseable = false;
   for (const snap of snaps) {
@@ -137,9 +136,6 @@ export async function getNextDailySequenceFromFirebase(date) {
       const productLine = String(val.productLine || "");
       const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
       if (isCoperion) return; // exclude Coperion numbers from P&R sequence calculation
-      const product = String(val.product || "");
-      const isBags = product.toLowerCase().includes("bags");
-      if (isBags) return; // exclude bags from P&R sequence calculation
       const suffixStr = unit.slice(-3);
       const n = parseInt(suffixStr, 10);
       if (Number.isFinite(n)) {
@@ -163,92 +159,10 @@ export async function getNextDailySequenceFromFirebase(date) {
       const unit = String(val.unitNumber || "");
       const productLine = String(val.productLine || "");
       const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-      const product = String(val.product || "");
-      const isBags = product.toLowerCase().includes("bags");
-      if (isBags) return;
-      count += 1;
+      if (!isCoperion) count += 1;
     });
   }
   return Math.min(999, count + 1);
-}
-
-// Compute the next P&R BAGS daily sequence (last three digits) for a given date.
-// Rules:
-// - Applies the same 00:01 rule and day bucketing logic as other sequences.
-// - Only counts records where product contains "bags" (case-insensitive) and productLine is not Coperion.
-// - Last three digits start at 201 each new day (00:01 rule applies)
-// - Returns the next suffix within 201..999
-export async function getNextBagsSequenceFromFirebase(date) {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const input = date instanceof Date ? date : new Date(date || Date.now());
-
-  // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-  const effective = new Date(input);
-  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    effective.setMinutes(effective.getMinutes() - 1);
-  }
-
-  // Local day boundaries
-  const start = new Date(effective);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-
-  // Build the Coperion EA prefix for this day so we can exclude it from BAGS sequence
-  const yearDigit = String(effective.getFullYear()).slice(-1);
-  const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
-  const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
-
-  // Determine which buckets to read:
-  // - local day key (new writes)
-  // - UTC day keys spanning this local day (legacy writes / timezone edge)
-  const dayKeys = new Set();
-  const localKey = formatLocalDayKey(start);
-  const startUtcKey = start.toISOString().slice(0, 10);
-  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(localKey);
-  dayKeys.add(startUtcKey);
-  dayKeys.add(endUtcKey);
-
-  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-  const snaps = await Promise.all(refs.map((r) => get(r)));
-
-  // Prefer continuing within the 201..999 range if already in use today.
-  let maxSuffix = 0;
-  let anyInRange = false;
-  let count = 0;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const unit = String(val.unitNumber || "");
-      const productLine = String(val.productLine || "");
-      const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-      const product = String(val.product || "");
-      const isBags = product.toLowerCase().includes("bags");
-      if (!isBags) return;
-
-      count += 1;
-      const suffixStr = unit.slice(-3);
-      const n = parseInt(suffixStr, 10);
-      if (Number.isFinite(n) && n >= 201 && n <= 999) {
-        anyInRange = true;
-        if (n > maxSuffix) maxSuffix = n;
-      }
-    });
-  }
-
-  if (anyInRange) return Math.min(999, maxSuffix + 1);
-  // First of day -> 201, then 202, ... (capped at 999)
-  return Math.min(999, 201 + count);
 }
 
 // Helper: day-of-year (1..365/366)
