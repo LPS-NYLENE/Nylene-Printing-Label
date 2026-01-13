@@ -4,81 +4,89 @@
 // IMPORTANT: Ensure your Realtime Database exists for the project and its URL:
 //   https://nylene-label-printer-default-rtdb.firebaseio.com
 
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getDatabase,
-  ref,
-  push,
-  serverTimestamp,
-  get,
+    initializeApp,
+    getApps,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+    getDatabase,
+    ref,
+    push,
+    serverTimestamp,
+    get,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
-  authDomain: "nylene-label-printer.firebaseapp.com",
-  databaseURL: "https://nylene-label-printer-default-rtdb.firebaseio.com",
-  projectId: "nylene-label-printer",
-  storageBucket: "nylene-label-printer.firebasestorage.app",
-  messagingSenderId: "906222982085",
-  appId: "1:906222982085:web:5c9808ced0307256c0b1ac",
+    apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
+    authDomain: "nylene-label-printer.firebaseapp.com",
+    databaseURL: "https://nylene-label-printer-default-rtdb.firebaseio.com",
+    projectId: "nylene-label-printer",
+    storageBucket: "nylene-label-printer.firebasestorage.app",
+    messagingSenderId: "906222982085",
+    appId: "1:906222982085:web:5c9808ced0307256c0b1ac",
 };
 
 export function getAppInstance() {
-  const apps = getApps();
-  if (apps.length) return apps[0];
-  return initializeApp(firebaseConfig);
+    const apps = getApps();
+    if (apps.length) return apps[0];
+    return initializeApp(firebaseConfig);
 }
 
 export async function savePrintToFirebase(record) {
-  try {
-    const app = getAppInstance();
-    const db = getDatabase(app);
+    try {
+        const app = getAppInstance();
+        const db = getDatabase(app);
 
-    // Use LOCAL day key (YYYY-MM-DD) so Firebase buckets match the operator's "today".
-    // Note: timestamp remains ISO/UTC; only the bucket key is localized.
-    const iso = record && record.timestamp ? record.timestamp : new Date().toISOString();
-    const when = parseIsoDateOrNow(iso);
-    const effective = apply0001Rule(when);
-    const day = formatLocalDayKey(effective); // YYYY-MM-DD (local)
-    const printsRef = ref(db, `prints/${day}`);
+        // Use LOCAL day key (YYYY-MM-DD) so Firebase buckets match the operator's "today".
+        // Note: timestamp remains ISO/UTC; only the bucket key is localized.
+        const iso =
+            record && record.timestamp
+                ? record.timestamp
+                : new Date().toISOString();
+        const when = parseIsoDateOrNow(iso);
+        const effective = apply0001Rule(when);
+        const day = formatLocalDayKey(effective); // YYYY-MM-DD (local)
+        const printsRef = ref(db, `prints/${day}`);
 
-    const payload = {
-      ...record,
-      _createdAt: serverTimestamp(),
-    };
+        const payload = {
+            ...record,
+            _createdAt: serverTimestamp(),
+        };
 
-    await push(printsRef, payload);
-    return true;
-  } catch (err) {
-    console.warn("Firebase save failed", err);
-    return false;
-  }
+        await push(printsRef, payload);
+        return true;
+    } catch (err) {
+        console.warn("Firebase save failed", err);
+        return false;
+    }
 }
 
 // Fetch all print logs from Realtime Database and return as a flat array
 // Sorted by timestamp ascending. Each item mirrors the schema saved by
 // savePrintToFirebase.
 export async function fetchAllPrintsFromFirebase() {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const rootRef = ref(db, "prints");
-  const snap = await get(rootRef);
-  const rows = [];
-  if (snap.exists()) {
-    snap.forEach((daySnap) => {
-      const dayKey = daySnap.key || ""; // YYYY-MM-DD
-      daySnap.forEach((printSnap) => {
-        const d = printSnap.val() || {};
-        rows.push({
-          id: printSnap.key,
-          day: dayKey,
-          ...d,
+    const app = getAppInstance();
+    const db = getDatabase(app);
+    const rootRef = ref(db, "prints");
+    const snap = await get(rootRef);
+    const rows = [];
+    if (snap.exists()) {
+        snap.forEach((daySnap) => {
+            const dayKey = daySnap.key || ""; // YYYY-MM-DD
+            daySnap.forEach((printSnap) => {
+                const d = printSnap.val() || {};
+                rows.push({
+                    id: printSnap.key,
+                    day: dayKey,
+                    ...d,
+                });
+            });
         });
-      });
-    });
-  }
-  rows.sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")));
-  return rows;
+    }
+    rows.sort((a, b) =>
+        String(a.timestamp || "").localeCompare(String(b.timestamp || ""))
+    );
+    return rows;
 }
 
 // Compute the next daily sequence (last three digits) for a given date
@@ -87,103 +95,110 @@ export async function fetchAllPrintsFromFirebase() {
 // day keys. For backward compatibility, we read both local and UTC buckets.
 // Returns 1 if no prior prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const input = date instanceof Date ? date : new Date(date || Date.now());
-  // Apply the app's 00:01 rule: 00:00-00:01 belongs to previous day
-  const effective = new Date(input);
-  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    effective.setMinutes(effective.getMinutes() - 1);
-  }
-  // Local day boundaries
-  const start = new Date(effective);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+    const app = getAppInstance();
+    const db = getDatabase(app);
+    const input = date instanceof Date ? date : new Date(date || Date.now());
+    // Apply the app's 00:01 rule: 00:00-00:01 belongs to previous day
+    const effective = new Date(input);
+    const minutesSinceMidnight =
+        effective.getHours() * 60 + effective.getMinutes();
+    if (minutesSinceMidnight < 1) {
+        effective.setMinutes(effective.getMinutes() - 1);
+    }
+    // Local day boundaries
+    const start = new Date(effective);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
 
-  // Build the Coperion EA prefix for this day so we can exclude it from P&R sequence
-  const yearDigit = String(effective.getFullYear()).slice(-1);
-  const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
-  const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
+    // Build the Coperion EA prefix for this day so we can exclude it from P&R sequence
+    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
+    const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
 
-  // Determine which buckets to read:
-  // - local day key (new writes)
-  // - UTC day keys spanning this local day (legacy writes / timezone edge)
-  const dayKeys = new Set();
-  const localKey = formatLocalDayKey(start);
-  const startUtcKey = start.toISOString().slice(0, 10);
-  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(localKey);
-  dayKeys.add(startUtcKey);
-  dayKeys.add(endUtcKey);
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    const dayKeys = new Set();
+    const localKey = formatLocalDayKey(start);
+    const startUtcKey = start.toISOString().slice(0, 10);
+    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+    dayKeys.add(localKey);
+    dayKeys.add(startUtcKey);
+    dayKeys.add(endUtcKey);
 
-  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-  const snaps = await Promise.all(refs.map((r) => get(r)));
+    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+    const snaps = await Promise.all(refs.map((r) => get(r)));
 
-  // For P&R: ignore any Coperion records (identified by explicit productLine or EA prefix)
-  let maxSuffix = 0;
-  let anyParseable = false;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const unit = String(val.unitNumber || "");
-      const productLine = String(val.productLine || "");
-      const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return; // exclude Coperion numbers from P&R sequence calculation
-      // Exclude Compound+BAGS records from the general P&R sequence; they use
-      // a dedicated daily suffix range starting at 201.
-      const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-      const product = String(val.product || "");
-      const isCompoundBags =
-        sourceGroup === "compound" && product.toLowerCase().endsWith("bags");
-      if (isCompoundBags) return;
-      const suffixStr = unit.slice(-3);
-      const n = parseInt(suffixStr, 10);
-      if (Number.isFinite(n)) {
-        anyParseable = true;
-        if (n > maxSuffix) maxSuffix = n;
-      }
-    });
-  }
-  if (anyParseable) return Math.min(999, maxSuffix + 1);
+    // For P&R: ignore any Coperion records (identified by explicit productLine or EA prefix)
+    let maxSuffix = 0;
+    let anyParseable = false;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
+            const unit = String(val.unitNumber || "");
+            const productLine = String(val.productLine || "");
+            const isCoperion =
+                productLine === "Coperion" ||
+                unit.startsWith(coperionPrefixForDay);
+            if (isCoperion) return; // exclude Coperion numbers from P&R sequence calculation
+            // Exclude Compound+BAGS records from the general P&R sequence; they use
+            // a dedicated daily suffix range starting at 201.
+            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
+            const product = String(val.product || "");
+            const isCompoundBags =
+                sourceGroup === "compound" &&
+                product.toLowerCase().endsWith("bags");
+            if (isCompoundBags) return;
+            const suffixStr = unit.slice(-3);
+            const n = parseInt(suffixStr, 10);
+            if (Number.isFinite(n)) {
+                anyParseable = true;
+                if (n > maxSuffix) maxSuffix = n;
+            }
+        });
+    }
+    if (anyParseable) return Math.min(999, maxSuffix + 1);
 
-  // If no parseable P&R units found inside boundary, count only P&R records to provide next number
-  let count = 0;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const unit = String(val.unitNumber || "");
-      const productLine = String(val.productLine || "");
-      const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-      const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-      const product = String(val.product || "");
-      const isCompoundBags =
-        sourceGroup === "compound" && product.toLowerCase().endsWith("bags");
-      if (isCompoundBags) return;
-      count += 1;
-    });
-  }
-  return Math.min(999, count + 1);
+    // If no parseable P&R units found inside boundary, count only P&R records to provide next number
+    let count = 0;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
+            const unit = String(val.unitNumber || "");
+            const productLine = String(val.productLine || "");
+            const isCoperion =
+                productLine === "Coperion" ||
+                unit.startsWith(coperionPrefixForDay);
+            if (isCoperion) return;
+            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
+            const product = String(val.product || "");
+            const isCompoundBags =
+                sourceGroup === "compound" &&
+                product.toLowerCase().endsWith("bags");
+            if (isCompoundBags) return;
+            count += 1;
+        });
+    }
+    return Math.min(999, count + 1);
 }
 
 // Helper: day-of-year (1..365/366)
 function getDayOfYear(date) {
-  const start = new Date(date.getFullYear(), 0, 1);
-  const diffMs = date - start;
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  return Math.floor(diffMs / oneDayMs) + 1;
+    const start = new Date(date.getFullYear(), 0, 1);
+    const diffMs = date - start;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    return Math.floor(diffMs / oneDayMs) + 1;
 }
 
 // Compute the next Coperion daily sequence (last three digits) for the given date.
@@ -193,192 +208,194 @@ function getDayOfYear(date) {
 // - Increments based on existing records in DB that match the day's EA prefix
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const input = date instanceof Date ? date : new Date(date || Date.now());
+    const app = getAppInstance();
+    const db = getDatabase(app);
+    const input = date instanceof Date ? date : new Date(date || Date.now());
 
-  // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-  const effective = new Date(input);
-  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    effective.setMinutes(effective.getMinutes() - 1);
-  }
+    // Apply 00:01 rule: 00:00-00:01 belongs to previous day
+    const effective = new Date(input);
+    const minutesSinceMidnight =
+        effective.getHours() * 60 + effective.getMinutes();
+    if (minutesSinceMidnight < 1) {
+        effective.setMinutes(effective.getMinutes() - 1);
+    }
 
-  // Local day boundaries
-  const start = new Date(effective);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+    // Local day boundaries
+    const start = new Date(effective);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
 
-  // Build the EA prefix for the day: EA1[Y][DDD]
-  const yearDigit = String(effective.getFullYear()).slice(-1);
-  const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
-  const prefix = `EA1${yearDigit}${doyStr}`;
+    // Build the EA prefix for the day: EA1[Y][DDD]
+    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
+    const prefix = `EA1${yearDigit}${doyStr}`;
 
-  // Determine which buckets to read:
-  // - local day key (new writes)
-  // - UTC day keys spanning this local day (legacy writes / timezone edge)
-  const dayKeys = new Set();
-  const localKey = formatLocalDayKey(start);
-  const startUtcKey = start.toISOString().slice(0, 10);
-  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(localKey);
-  dayKeys.add(startUtcKey);
-  dayKeys.add(endUtcKey);
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    const dayKeys = new Set();
+    const localKey = formatLocalDayKey(start);
+    const startUtcKey = start.toISOString().slice(0, 10);
+    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+    dayKeys.add(localKey);
+    dayKeys.add(startUtcKey);
+    dayKeys.add(endUtcKey);
 
-  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-  const snaps = await Promise.all(refs.map((r) => get(r)));
+    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+    const snaps = await Promise.all(refs.map((r) => get(r)));
 
-  let maxSuffix = 0;
-  let anyParseable = false;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const unit = String(val.unitNumber || "");
-      if (!unit.startsWith(prefix)) return;
-      const suffixStr = unit.slice(-3);
-      const n = parseInt(suffixStr, 10);
-      if (Number.isFinite(n)) {
-        anyParseable = true;
-        if (n > maxSuffix) maxSuffix = n;
-      }
-    });
-  }
-  if (anyParseable) return Math.min(999, maxSuffix + 1);
+    let maxSuffix = 0;
+    let anyParseable = false;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
+            const unit = String(val.unitNumber || "");
+            if (!unit.startsWith(prefix)) return;
+            const suffixStr = unit.slice(-3);
+            const n = parseInt(suffixStr, 10);
+            if (Number.isFinite(n)) {
+                anyParseable = true;
+                if (n > maxSuffix) maxSuffix = n;
+            }
+        });
+    }
+    if (anyParseable) return Math.min(999, maxSuffix + 1);
 
-  // If none parseable matched, count EA-prefixed records for the boundary and offset from 401
-  let count = 0;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const unit = String(val.unitNumber || "");
-      if (unit.startsWith(prefix)) count += 1;
-    });
-  }
-  // First of day -> 401, then 402, ... (capped at 999)
-  return Math.min(999, 401 + count);
+    // If none parseable matched, count EA-prefixed records for the boundary and offset from 401
+    let count = 0;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
+            const unit = String(val.unitNumber || "");
+            if (unit.startsWith(prefix)) count += 1;
+        });
+    }
+    // First of day -> 401, then 402, ... (capped at 999)
+    return Math.min(999, 401 + count);
 }
 
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
 // Rules:
 // - Applies only to prints where sourceGroup === "compound" AND product ends with "BAGS"
-// - Last three digits start at 201 each new day (00:01 rule applies)
+// - Last three digits start at 201 each new day (00:01 rule applie)
 // - Increments based on existing matching records in DB
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const input = date instanceof Date ? date : new Date(date || Date.now());
+    const app = getAppInstance();
+    const db = getDatabase(app);
+    const input = date instanceof Date ? date : new Date(date || Date.now());
 
-  // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-  const effective = new Date(input);
-  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    effective.setMinutes(effective.getMinutes() - 1);
-  }
+    // Apply 00:01 rule: 00:00-00:01 belongs to previous day
+    const effective = new Date(input);
+    const minutesSinceMidnight =
+        effective.getHours() * 60 + effective.getMinutes();
+    if (minutesSinceMidnight < 1) {
+        effective.setMinutes(effective.getMinutes() - 1);
+    }
 
-  // Local day boundaries
-  const start = new Date(effective);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+    // Local day boundaries
+    const start = new Date(effective);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
 
-  // Determine which buckets to read:
-  // - local day key (new writes)
-  // - UTC day keys spanning this local day (legacy writes / timezone edge)
-  const dayKeys = new Set();
-  const localKey = formatLocalDayKey(start);
-  const startUtcKey = start.toISOString().slice(0, 10);
-  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(localKey);
-  dayKeys.add(startUtcKey);
-  dayKeys.add(endUtcKey);
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    const dayKeys = new Set();
+    const localKey = formatLocalDayKey(start);
+    const startUtcKey = start.toISOString().slice(0, 10);
+    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+    dayKeys.add(localKey);
+    dayKeys.add(startUtcKey);
+    dayKeys.add(endUtcKey);
 
-  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-  const snaps = await Promise.all(refs.map((r) => get(r)));
+    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+    const snaps = await Promise.all(refs.map((r) => get(r)));
 
-  let maxSuffix = 0;
-  let anyParseable = false;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
+    let maxSuffix = 0;
+    let anyParseable = false;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
 
-      const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-      if (sourceGroup !== "compound") return;
-      const product = String(val.product || "");
-      if (!product.toLowerCase().endsWith("bags")) return;
+            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
+            if (sourceGroup !== "compound") return;
+            const product = String(val.product || "");
+            if (!product.toLowerCase().endsWith("bags")) return;
 
-      const unit = String(val.unitNumber || "");
-      const suffixStr = unit.slice(-3);
-      const n = parseInt(suffixStr, 10);
-      if (Number.isFinite(n)) {
-        anyParseable = true;
-        if (n > maxSuffix) maxSuffix = n;
-      }
-    });
-  }
+            const unit = String(val.unitNumber || "");
+            const suffixStr = unit.slice(-3);
+            const n = parseInt(suffixStr, 10);
+            if (Number.isFinite(n)) {
+                anyParseable = true;
+                if (n > maxSuffix) maxSuffix = n;
+            }
+        });
+    }
 
-  if (anyParseable) {
-    const next = maxSuffix >= 201 ? maxSuffix + 1 : 201;
-    return Math.min(999, next);
-  }
+    if (anyParseable) {
+        const next = maxSuffix >= 201 ? maxSuffix + 1 : 201;
+        return Math.min(999, next);
+    }
 
-  // If none parseable matched, count matching records for the boundary and offset from 201
-  let count = 0;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-      const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-      if (sourceGroup !== "compound") return;
-      const product = String(val.product || "");
-      if (!product.toLowerCase().endsWith("bags")) return;
-      count += 1;
-    });
-  }
-  // First of day -> 201, then 202, ... (capped at 999)
-  return Math.min(999, 201 + count);
+    // If none parseable matched, count matching records for the boundary and offset from 201
+    let count = 0;
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const t = new Date(ts).getTime();
+            if (!(t >= start.getTime() && t < end.getTime())) return;
+            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
+            if (sourceGroup !== "compound") return;
+            const product = String(val.product || "");
+            if (!product.toLowerCase().endsWith("bags")) return;
+            count += 1;
+        });
+    }
+    // First of day -> 201, then 202, ... (capped at 999)
+    return Math.min(999, 201 + count);
 }
 
 function parseIsoDateOrNow(value) {
-  const d = new Date(value);
-  return Number.isFinite(d.getTime()) ? d : new Date();
+    const d = new Date(value);
+    return Number.isFinite(d.getTime()) ? d : new Date();
 }
 
 // For times between 00:00 and 00:01 (exclusive), treat as previous day.
 // Matches the "00:01 rule" used in unit number generation.
 function apply0001Rule(date) {
-  const d = new Date(date);
-  const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    d.setMinutes(d.getMinutes() - 1);
-  }
-  return d;
+    const d = new Date(date);
+    const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
+    if (minutesSinceMidnight < 1) {
+        d.setMinutes(d.getMinutes() - 1);
+    }
+    return d;
 }
 
 function formatLocalDayKey(date) {
-  const d = new Date(date);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
 }
