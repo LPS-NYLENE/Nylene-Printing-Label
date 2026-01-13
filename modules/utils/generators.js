@@ -1,4 +1,8 @@
-import { getNextDailySequenceFromFirebase, getNextCoperionSequenceFromFirebase } from "../firebase-db.js";
+import {
+    getNextDailySequenceFromFirebase,
+    getNextCoperionSequenceFromFirebase,
+    getNextBagsSequenceFromFirebase,
+} from "../firebase-db.js";
 
 export function generateUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
@@ -23,6 +27,21 @@ export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) 
     const yearDigit = String(effective.getFullYear()).slice(-1);
 
     const seq = await getNextDailySequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
+}
+
+// Explicit BAGS generator, to be used for products containing "BAGS" in P&R flow.
+// Format: [prefix] + 1 + last digit of year + day-of-year (001–365/366) + suffix starting at 201
+export async function generateBagsUnitNumberFromFirebase(sourceGroup, sourceLetter) {
+    const now = new Date();
+    const effective = apply1201Rule(now);
+    const doy = getDayOfYear(effective);
+    const doyStr = String(doy).padStart(3, "0");
+    const yearDigit = String(effective.getFullYear()).slice(-1);
+
+    const seq = await getNextBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
