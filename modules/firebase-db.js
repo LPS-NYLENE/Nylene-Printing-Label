@@ -173,6 +173,14 @@ function getDayOfYear(date) {
   return Math.floor(diffMs / oneDayMs) + 1;
 }
 
+// NOTE: Avoid importing prefix logic from generators.js (it imports this module).
+function resolveCompoundPrefix(sourceLetter) {
+  const letter = String(sourceLetter || "").toUpperCase();
+  if (letter === "A") return "AC";
+  if (letter === "B") return "BC";
+  return "AC";
+}
+
 // Compute the next Coperion daily sequence (last three digits) for the given date.
 // Rules:
 // - Prefix for Coperion: EA + 1 + last-digit-of-year + day-of-year (DDD)
@@ -254,6 +262,101 @@ export async function getNextCoperionSequenceFromFirebase(date) {
   }
   // First of day -> 401, then 402, ... (capped at 999)
   return Math.min(999, 401 + count);
+}
+
+// Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
+// Rules:
+// - Applies only to P&R Compound labels where product ends with "BAGS"
+// - Last three digits start at 201 each new day (00:01 rule applies)
+// - Increments based on existing records in DB that match the day's prefix
+// - Returns the next suffix within 201..999
+export async function getNextCompoundBagsSequenceFromFirebase(date, sourceLetter) {
+  const app = getAppInstance();
+  const db = getDatabase(app);
+  const input = date instanceof Date ? date : new Date(date || Date.now());
+
+  // Apply 00:01 rule: 00:00-00:01 belongs to previous day
+  const effective = new Date(input);
+  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
+  if (minutesSinceMidnight < 1) {
+    effective.setMinutes(effective.getMinutes() - 1);
+  }
+
+  // Local day boundaries
+  const start = new Date(effective);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  // Build the Compound prefix for the day: (AC|BC)1[Y][DDD]
+  const yearDigit = String(effective.getFullYear()).slice(-1);
+  const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
+  const compoundPrefix = resolveCompoundPrefix(sourceLetter);
+  const unitPrefixForDay = `${compoundPrefix}1${yearDigit}${doyStr}`;
+
+  // Determine which buckets to read:
+  // - local day key (new writes)
+  // - UTC day keys spanning this local day (legacy writes / timezone edge)
+  const dayKeys = new Set();
+  const localKey = formatLocalDayKey(start);
+  const startUtcKey = start.toISOString().slice(0, 10);
+  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+  dayKeys.add(localKey);
+  dayKeys.add(startUtcKey);
+  dayKeys.add(endUtcKey);
+
+  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+  const snaps = await Promise.all(refs.map((r) => get(r)));
+
+  const isCompoundBagsRecord = (val) => {
+    const group = String(val && val.sourceGroup ? val.sourceGroup : "").toLowerCase();
+    if (group !== "compound") return false;
+    const productLine = String(val && val.productLine ? val.productLine : "");
+    if (productLine === "Coperion") return false;
+    const product = String(val && val.product ? val.product : "").trim().toUpperCase();
+    return product.endsWith("BAGS");
+  };
+
+  let maxSuffix = 0;
+  let anyParseable = false;
+  for (const snap of snaps) {
+    if (!snap.exists()) continue;
+    snap.forEach((child) => {
+      const val = child.val() || {};
+      if (!isCompoundBagsRecord(val)) return;
+      const ts = val.timestamp;
+      if (!ts) return;
+      const t = new Date(ts).getTime();
+      if (!(t >= start.getTime() && t < end.getTime())) return;
+      const unit = String(val.unitNumber || "");
+      if (!unit.startsWith(unitPrefixForDay)) return;
+      const suffixStr = unit.slice(-3);
+      const n = parseInt(suffixStr, 10);
+      if (Number.isFinite(n)) {
+        anyParseable = true;
+        if (n > maxSuffix) maxSuffix = n;
+      }
+    });
+  }
+  if (anyParseable) return Math.min(999, maxSuffix + 1);
+
+  // If none parseable matched, count matching records for the boundary and offset from 201
+  let count = 0;
+  for (const snap of snaps) {
+    if (!snap.exists()) continue;
+    snap.forEach((child) => {
+      const val = child.val() || {};
+      if (!isCompoundBagsRecord(val)) return;
+      const ts = val.timestamp;
+      if (!ts) return;
+      const t = new Date(ts).getTime();
+      if (!(t >= start.getTime() && t < end.getTime())) return;
+      const unit = String(val.unitNumber || "");
+      if (unit.startsWith(unitPrefixForDay)) count += 1;
+    });
+  }
+  // First of day -> 201, then 202, ... (capped at 999)
+  return Math.min(999, 201 + count);
 }
 
 function parseIsoDateOrNow(value) {
