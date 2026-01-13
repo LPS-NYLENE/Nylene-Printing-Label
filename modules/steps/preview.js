@@ -1,9 +1,11 @@
 import { state, showScreen } from "../state.js";
 import {
     generateUnitNumberFromFirebase,
+    generateBagsUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
+import { isBagsProduct } from "../utils/product-flags.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
@@ -24,8 +26,7 @@ export function initPreviewStep() {
 
     // Determine how many copies should be printed for the current product
     function getDesiredPrintCopies() {
-        const code = String(state.bigCode || "");
-        return code.toLowerCase().includes("bags") ? 4 : 2;
+        return isBagsProduct(state.bigCode) ? 4 : 2;
     }
 
     // Prepare DOM to print N copies by cloning the label canvas. Extra copies
@@ -141,7 +142,9 @@ export function initPreviewStep() {
             try {
                 const next = state.isCoperion
                     ? await generateCoperionUnitNumberFromFirebase()
-                    : await generateUnitNumberFromFirebase(group, letter);
+                        : isBagsProduct(state.bigCode)
+                          ? await generateBagsUnitNumberFromFirebase(group, letter)
+                          : await generateUnitNumberFromFirebase(group, letter);
                 state.unitNumber = next;
             } catch (e) {
                 console.warn(
@@ -213,7 +216,9 @@ export function initPreviewStep() {
             const letter = group ? state.source[group] : undefined;
             const next = state.isCoperion
                 ? await generateCoperionUnitNumberFromFirebase()
-                : await generateUnitNumberFromFirebase(group, letter);
+                : isBagsProduct(state.bigCode)
+                  ? await generateBagsUnitNumberFromFirebase(group, letter)
+                  : await generateUnitNumberFromFirebase(group, letter);
             state.unitNumber = next;
             updatePreview();
         } catch (e) {
