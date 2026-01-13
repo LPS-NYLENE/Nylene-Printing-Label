@@ -14,7 +14,7 @@ import {
 // Default fallback when no prior selection exists for a contextt
 const PR_DEFAULT_PRODUCT = "CSDN-INT";
 
-// Allowed products for P&R (from provided list )
+// Allowed products for P&R (from provided list
 const PR_PRODUCT_CHOICES = [
     "CSDN-INT",
     "BS700D",
