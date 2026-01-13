@@ -2,6 +2,7 @@ import { state, showScreen } from "../state.js";
 import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
+    generateCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
 
@@ -11,6 +12,23 @@ import { appendHistoryRecord } from "../history.js";
 export function initPreviewStep() {
     document.addEventListener("updatePreview", updatePreview);
     updatePreview();
+
+    function isCompoundBagsLabel() {
+        if (state.isCoperion) return false;
+        const group = String(state.activeGroup || "").toLowerCase();
+        if (group !== "compound") return false;
+        const product = String(state.bigCode || "").trim().toUpperCase();
+        return product.endsWith("BAGS");
+    }
+
+    async function getNextUnitNumberForCurrentState() {
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
+        if (state.isCoperion) return await generateCoperionUnitNumberFromFirebase();
+        if (isCompoundBagsLabel())
+            return await generateCompoundBagsUnitNumberFromFirebase(group, letter);
+        return await generateUnitNumberFromFirebase(group, letter);
+    }
 
     const back = document.getElementById("backToWeights");
     if (back) back.addEventListener("click", () => showScreen("weights"));
@@ -139,9 +157,7 @@ export function initPreviewStep() {
             state.reprintAvailable = true;
             // Prepare next displayed number by reading from Firebase
             try {
-                const next = state.isCoperion
-                    ? await generateCoperionUnitNumberFromFirebase()
-                    : await generateUnitNumberFromFirebase(group, letter);
+                const next = await getNextUnitNumberForCurrentState();
                 state.unitNumber = next;
             } catch (e) {
                 console.warn(
@@ -209,11 +225,7 @@ export function initPreviewStep() {
     // After wiring up UI, refresh the unit number from Firebase for preview
     (async function refreshUnit() {
         try {
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
-            const next = state.isCoperion
-                ? await generateCoperionUnitNumberFromFirebase()
-                : await generateUnitNumberFromFirebase(group, letter);
+            const next = await getNextUnitNumberForCurrentState();
             state.unitNumber = next;
             updatePreview();
         } catch (e) {
