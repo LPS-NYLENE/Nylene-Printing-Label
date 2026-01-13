@@ -10,8 +10,12 @@ import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
 
 export function initPreviewStep() {
-    document.addEventListener("updatePreview", updatePreview);
-    updatePreview();
+    document.addEventListener("updatePreview", () => {
+        // Fire-and-forget: we refresh the unit number first, then render.
+        // (Event listeners cannot be awaited by callers.)
+        void handleUpdatePreview();
+    });
+    void handleUpdatePreview();
 
     const back = document.getElementById("backToWeights");
     if (back) back.addEventListener("click", () => showScreen("weights"));
@@ -118,7 +122,9 @@ export function initPreviewStep() {
         });
 
     async function handleInitialPrintFlow() {
-        updatePreview();
+        // Ensure the displayed number is based on the current product/context.
+        await refreshUnitNumberIfNeeded();
+        renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
         try {
             await appendLogRecord();
@@ -152,7 +158,7 @@ export function initPreviewStep() {
             console.error("Log append failed after print", err);
             alert("Saving log failed after printing.");
         } finally {
-            updatePreview();
+            renderPreview();
             // Reload the app after printing completes
             window.location.reload();
         }
@@ -176,7 +182,7 @@ export function initPreviewStep() {
         state.source = { ...snapshot.source };
         state.activeGroup = snapshot.activeGroup;
         state.previewTimestamp = snapshot.printedAt;
-        updatePreview();
+        renderPreview();
 
         let printError = null;
         try {
@@ -190,7 +196,7 @@ export function initPreviewStep() {
             state.source = { ...previous.source };
             state.activeGroup = previous.activeGroup;
             state.previewTimestamp = previous.previewTimestamp;
-            updatePreview();
+            renderPreview();
         }
         if (printError) throw printError;
         state.reprintAvailable = false;
@@ -205,14 +211,16 @@ export function initPreviewStep() {
 
     bindExcelButton();
 
-    // After wiring up UI, refresh the unit number from Firebase for preview
+    // After wiring up UI, attempt an initial refresh only if we have enough context.
+    // Otherwise, we’ll refresh on first entry into Preview (updatePreview event).
     (async function refreshUnit() {
         try {
             const group = state.activeGroup;
             const letter = group ? state.source[group] : undefined;
-            const next = await getNextUnitNumberForPreview(group, letter);
-            state.unitNumber = next;
-            updatePreview();
+            if (!state.isCoperion && (!group || !letter)) return;
+            if (!state.isCoperion && !String(state.bigCode || "").trim()) return;
+            await refreshUnitNumberIfNeeded(true);
+            renderPreview();
         } catch (e) {
             console.warn("Initial Firebase unit number fetch failed", e);
         }
@@ -232,7 +240,39 @@ export function initPreviewStep() {
         return await generateUnitNumberFromFirebase(group, letter);
     }
 
-    function updatePreview() {
+    function getUnitNumberContextKey() {
+        const group = String(state.activeGroup || "").toLowerCase();
+        const letter = group ? String(state.source[group] || "") : "";
+        const product = String(state.bigCode || "").trim();
+        // Include flow + bag-ness so we refresh when toggling between products.
+        const isBags = isCompoundBagsContext(group, product);
+        const flow = state.isCoperion ? "cop" : "pr";
+        return `${flow}:${group}:${letter}:${isBags ? "bags" : "std"}:${product}`;
+    }
+
+    async function refreshUnitNumberIfNeeded(force = false) {
+        const key = getUnitNumberContextKey();
+        if (!force && state.__unitNumberContextKey === key && state.unitNumber) return;
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
+        // If we still don't have enough context, do nothing (prevents early stale fetches).
+        if (!state.isCoperion && (!group || !letter)) return;
+        if (!state.isCoperion && !String(state.bigCode || "").trim()) return;
+        const next = await getNextUnitNumberForPreview(group, letter);
+        state.unitNumber = next;
+        state.__unitNumberContextKey = key;
+    }
+
+    async function handleUpdatePreview() {
+        try {
+            await refreshUnitNumberIfNeeded();
+        } catch (e) {
+            console.warn("Failed to refresh unit number for preview", e);
+        }
+        renderPreview();
+    }
+
+    function renderPreview() {
         const now = state.previewTimestamp
             ? new Date(state.previewTimestamp)
             : new Date();
