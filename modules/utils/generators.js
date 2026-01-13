@@ -1,4 +1,8 @@
-import { getNextDailySequenceFromFirebase, getNextCoperionSequenceFromFirebase } from "../firebase-db.js";
+import {
+    getNextDailySequenceFromFirebase,
+    getNextCoperionSequenceFromFirebase,
+    getNextCompoundBagsSequenceFromFirebase,
+} from "../firebase-db.js";
 
 export function generateUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
@@ -39,6 +43,25 @@ export async function generateCoperionUnitNumberFromFirebase() {
     const seq = await getNextCoperionSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     return `EA1${yearDigit}${doyStr}${seqStr}`;
+}
+
+// Explicit Compound+BAGS generator, used only when:
+// - sourceGroup === "compound"
+// - product code ends with "BAGS"
+// Format: (AC|BC) + 1 + last digit of year + day-of-year (DDD) + suffix starting at 201
+export async function generateCompoundBagsUnitNumberFromFirebase(
+    sourceGroup,
+    sourceLetter
+) {
+    const now = new Date();
+    const effective = apply1201Rule(now);
+    const doy = getDayOfYear(effective);
+    const doyStr = String(doy).padStart(3, "0");
+    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const seq = await getNextCompoundBagsSequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
 }
 
 function getDayOfYear(date) {
