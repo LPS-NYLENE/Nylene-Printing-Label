@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   get,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-import { isBagsProduct } from "./utils/product-flags.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
@@ -122,7 +121,7 @@ export async function getNextDailySequenceFromFirebase(date) {
   const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
   const snaps = await Promise.all(refs.map((r) => get(r)));
 
-  // For P&R (non-bags): ignore any Coperion records and any bag records.
+  // For P&R: ignore any Coperion records (identified by explicit productLine or EA prefix)
   let maxSuffix = 0;
   let anyParseable = false;
   for (const snap of snaps) {
@@ -137,8 +136,6 @@ export async function getNextDailySequenceFromFirebase(date) {
       const productLine = String(val.productLine || "");
       const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
       if (isCoperion) return; // exclude Coperion numbers from P&R sequence calculation
-      const isBags = isBagsProduct(val.product);
-      if (isBags) return; // bags have their own independent sequence (201+)
       const suffixStr = unit.slice(-3);
       const n = parseInt(suffixStr, 10);
       if (Number.isFinite(n)) {
@@ -149,7 +146,7 @@ export async function getNextDailySequenceFromFirebase(date) {
   }
   if (anyParseable) return Math.min(999, maxSuffix + 1);
 
-  // If no parseable P&R units found inside boundary, count only non-bags P&R records to provide next number
+  // If no parseable P&R units found inside boundary, count only P&R records to provide next number
   let count = 0;
   for (const snap of snaps) {
     if (!snap.exists()) continue;
@@ -162,114 +159,10 @@ export async function getNextDailySequenceFromFirebase(date) {
       const unit = String(val.unitNumber || "");
       const productLine = String(val.productLine || "");
       const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-      const isBags = isBagsProduct(val.product);
-      if (isBags) return;
-      count += 1;
+      if (!isCoperion) count += 1;
     });
   }
   return Math.min(999, count + 1);
-}
-
-// Compute the next Bags daily sequence (last three digits) for the given date.
-// Rules:
-// - Bags use the same unit number format as P&R, but their suffix starts at 201 each day
-// - Only counts records where product includes "bags" (case-insensitive)
-// - Excludes Coperion records (by productLine or EA prefix) to avoid cross-contamination
-// - Returns the next suffix within 201..999
-export async function getNextBagsSequenceFromFirebase(date) {
-  const app = getAppInstance();
-  const db = getDatabase(app);
-  const input = date instanceof Date ? date : new Date(date || Date.now());
-
-  // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-  const effective = new Date(input);
-  const minutesSinceMidnight = effective.getHours() * 60 + effective.getMinutes();
-  if (minutesSinceMidnight < 1) {
-    effective.setMinutes(effective.getMinutes() - 1);
-  }
-
-  // Local day boundaries
-  const start = new Date(effective);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-
-  // Build Coperion prefix for the day so we can exclude it
-  const yearDigit = String(effective.getFullYear()).slice(-1);
-  const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
-  const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
-
-  // Determine which buckets to read:
-  // - local day key (new writes)
-  // - UTC day keys spanning this local day (legacy writes / timezone edge)
-  const dayKeys = new Set();
-  const localKey = formatLocalDayKey(start);
-  const startUtcKey = start.toISOString().slice(0, 10);
-  const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-  dayKeys.add(localKey);
-  dayKeys.add(startUtcKey);
-  dayKeys.add(endUtcKey);
-
-  const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-  const snaps = await Promise.all(refs.map((r) => get(r)));
-
-  let maxSuffix = 0;
-  let anyParseable = false;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-
-      const unit = String(val.unitNumber || "");
-      const productLine = String(val.productLine || "");
-      const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-
-      const isBags = isBagsProduct(val.product);
-      if (!isBags) return;
-
-      const suffixStr = unit.slice(-3);
-      const n = parseInt(suffixStr, 10);
-      if (Number.isFinite(n)) {
-        anyParseable = true;
-        if (n > maxSuffix) maxSuffix = n;
-      }
-    });
-  }
-
-  // If we found parseable bag suffixes, only continue the series when it is already in the 201+ range.
-  // This ensures that any legacy bag labels that used 001+ don't cause bags to continue at 002, etc.
-  if (anyParseable) {
-    const next = maxSuffix >= 201 ? maxSuffix + 1 : 201;
-    return Math.min(999, next);
-  }
-
-  // If none parseable matched, count bag records for the boundary and offset from 201.
-  let count = 0;
-  for (const snap of snaps) {
-    if (!snap.exists()) continue;
-    snap.forEach((child) => {
-      const val = child.val() || {};
-      const ts = val.timestamp;
-      if (!ts) return;
-      const t = new Date(ts).getTime();
-      if (!(t >= start.getTime() && t < end.getTime())) return;
-
-      const unit = String(val.unitNumber || "");
-      const productLine = String(val.productLine || "");
-      const isCoperion = productLine === "Coperion" || unit.startsWith(coperionPrefixForDay);
-      if (isCoperion) return;
-
-      const isBags = isBagsProduct(val.product);
-      if (isBags) count += 1;
-    });
-  }
-  return Math.min(999, 201 + count);
 }
 
 // Helper: day-of-year (1..365/366)
