@@ -32,6 +32,7 @@
     </div>
     <footer class="screen-footer">
         <button id="btnReprint" class="btn secondary">Reprint</button>
+        <button id="btnReissue" class="btn secondary">Reissue</button>
         <button id="btnLogout" class="btn tertiary">Log out</button>
         <div class="spacer"></div>
         <div class="right-buttons">
@@ -42,4 +43,90 @@
             <button id="btnNextFromSource" class="btn primary">Next</button>
         </div>
     </footer>
+
+    <div id="reissueSearchModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Reissue search</h3>
+            <label style="display: grid; gap: 8px; font-weight: 600">
+                BOX NUMBER
+                <input
+                    id="reissueBoxSearch"
+                    type="text"
+                    placeholder="Enter box number"
+                    style="padding: 12px"
+                />
+            </label>
+            <div
+                id="reissueSearchError"
+                class="muted-text"
+                style="color: #b00020; margin-top: 8px"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="reissueCancelSearch" class="btn secondary">
+                    Cancel
+                </button>
+                <div class="spacer"></div>
+                <button id="reissueSearchBtn" class="btn primary">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reissueEditModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Reissue details</h3>
+            <div id="reissueOriginalBox" class="muted-text"></div>
+            <div id="reissueSourceMeta" class="muted-text"></div>
+            <div class="form" style="margin-top: 12px">
+                <label>
+                    PRODUCT
+                    <input
+                        id="reissueProduct"
+                        type="text"
+                        placeholder="Product"
+                    />
+                </label>
+                <label>
+                    NET WEIGHT (LBS.)
+                    <input
+                        id="reissueNet"
+                        type="number"
+                        inputmode="decimal"
+                        placeholder="0"
+                    />
+                </label>
+                <label>
+                    GROSS WEIGHT (LBS.)
+                    <input
+                        id="reissueGross"
+                        type="number"
+                        inputmode="decimal"
+                        placeholder="0"
+                    />
+                </label>
+                <label>
+                    TARE WEIGHT (LBS.)
+                    <input
+                        id="reissueTare"
+                        type="number"
+                        inputmode="decimal"
+                        placeholder="0"
+                        disabled
+                    />
+                </label>
+            </div>
+            <div
+                id="reissueEditError"
+                class="form-error"
+                role="alert"
+                aria-live="polite"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="reissueCancelEdit" class="btn secondary">
+                    Cancel
+                </button>
+                <div class="spacer"></div>
+                <button id="reissueConfirm" class="btn primary">Confirm</button>
+            </div>
+        </div>
+    </div>
 </section>

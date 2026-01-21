@@ -24,6 +24,11 @@ export const state = {
     previewTimestamp: null,
     // Whether the next click should reprint the last label
     reprintAvailable: false,
+    // Flag and metadata for reissue flow
+    reissueFlag: "",
+    reissueOriginalUnit: null,
+    // Prevents preview from overwriting a newly generated reissue unit number
+    lockUnitNumberOnce: false,
 };
 
 export const screens = {

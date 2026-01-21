@@ -2,15 +2,23 @@ import { state, showScreen } from "../state.js";
 import { generateUnitNumberFromFirebase } from "../utils/generators.js";
 import { loadLogs } from "../logs.js";
 import { getAppInstance } from "../firebase-db.js";
+import { initReissueFlow } from "./reissue.js";
 import {
     getAuth,
     signOut,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 export function initSourceStep() {
+    function clearReissueState() {
+        state.reissueFlag = "";
+        state.reissueOriginalUnit = null;
+        state.lockUnitNumberOnce = false;
+    }
+
     const copBtn = document.getElementById("btnCoperion");
     if (copBtn)
         copBtn.addEventListener("click", () => {
+            clearReissueState();
             // Default Coperion context
             state.activeGroup = "compound";
             state.source.compound = "A";
@@ -20,6 +28,7 @@ export function initSourceStep() {
         });
     document.querySelectorAll(".btn-col[data-group] .option").forEach((btn) => {
         btn.addEventListener("click", () => {
+            clearReissueState();
             const group = btn.parentElement.getAttribute("data-group");
             btn.parentElement
                 .querySelectorAll(".option")
@@ -52,6 +61,7 @@ export function initSourceStep() {
 
     document.querySelectorAll("[data-special]").forEach((btn) => {
         btn.addEventListener("click", () => {
+            clearReissueState();
             document
                 .querySelectorAll("[data-special]")
                 .forEach((x) => x.classList.remove("selected"));
@@ -99,6 +109,7 @@ export function initSourceStep() {
     const next = document.getElementById("btnNextFromSource");
     if (next)
         next.addEventListener("click", () => {
+            clearReissueState();
             const chosenGroup =
                 state.activeGroup ||
                 ["silo", "dryer", "compound"].find((g) => state.source[g]);
@@ -199,4 +210,6 @@ export function initSourceStep() {
             window.addEventListener("afterprint", restore, { once: true });
             window.print();
         });
+
+    initReissueFlow();
 }
