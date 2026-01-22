@@ -252,6 +252,11 @@ export function initPreviewStep() {
 
     async function refreshUnitNumberIfNeeded(force = false) {
         const key = getUnitNumberContextKey();
+        if (state.lockUnitNumberOnce) {
+            state.lockUnitNumberOnce = false;
+            state.__unitNumberContextKey = key;
+            return;
+        }
         if (!force && state.__unitNumberContextKey === key && state.unitNumber) return;
         const group = state.activeGroup;
         const letter = group ? state.source[group] : undefined;

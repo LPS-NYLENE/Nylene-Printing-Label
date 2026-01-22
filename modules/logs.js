@@ -46,6 +46,7 @@ export function buildLogRecord() {
         netKg: lbToKg(Number(state.weights.netLb || 0)),
         tareLb: Number(state.weights.tareLb || 0),
         tareKg: lbToKg(Number(state.weights.tareLb || 0)),
+        reissueFlag: state.reissueFlag === "RI" ? "RI" : "",
     };
 }
 
@@ -269,6 +270,7 @@ function formatForMasExcel(rec) {
     const prefix = resolvePrefixFromUnit(unit);
     const code2003 = 2003;
     const unitType = "LB";
+    const reissueFlag = String(rec && rec.reissueFlag ? rec.reissueFlag : "");
     return [
         dateStr,
         timeStr,
@@ -283,6 +285,7 @@ function formatForMasExcel(rec) {
         prefix,
         code2003,
         unitType,
+        reissueFlag === "RI" ? "RI" : "",
     ];
 }
 
@@ -301,6 +304,7 @@ function buildMasHeaderAndRows(rows) {
         "PREFIX",
         "2003",
         "UOM",
+        "RI",
     ];
     return [header, ...rows];
 }
