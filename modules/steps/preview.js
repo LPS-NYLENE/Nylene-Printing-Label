@@ -277,6 +277,26 @@ export function initPreviewStep() {
         renderPreview();
     }
 
+    function renderProductName(productEl, productCode) {
+        if (!productEl) return;
+        const raw = typeof productCode === "string" ? productCode.trim() : "";
+        productEl.textContent = "";
+        if (!raw) {
+            productEl.textContent = "—";
+            return;
+        }
+        const match = raw.match(/^(.*?)(-(01|02))$/);
+        if (match) {
+            const base = match[1];
+            const suffix = match[2];
+            productEl.appendChild(document.createTextNode(base));
+            productEl.appendChild(document.createElement("br"));
+            productEl.appendChild(document.createTextNode(suffix));
+            return;
+        }
+        productEl.textContent = raw;
+    }
+
     function renderPreview() {
         const now = state.previewTimestamp
             ? new Date(state.previewTimestamp)
@@ -314,7 +334,7 @@ export function initPreviewStep() {
 
         const productEl = document.getElementById("productName");
         const sourceEl = document.getElementById("sourceChosen");
-        if (productEl) productEl.textContent = state.bigCode || "—";
+        renderProductName(productEl, state.bigCode);
         if (sourceEl) {
             const group = state.activeGroup;
             const letter = group ? state.source[group] : null;
