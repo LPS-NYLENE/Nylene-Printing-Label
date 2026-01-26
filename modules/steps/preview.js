@@ -6,8 +6,15 @@ import {
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
 
-import { appendLogRecord, bindExcelButton } from "../logs.js";
+import { appendLogRecord, bindExcelButton, buildLogRecord } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
+import {
+    enqueuePrintJob,
+    waitForPrintJobStart,
+    completePrintJob,
+    startPrintJobLeaseRenewal,
+    createPrintRequestId,
+} from "../print-queue.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -99,6 +106,47 @@ export function initPreviewStep() {
         cleanupCopies();
     }
 
+    async function beginQueuedPrint({ allowDuplicate, onStatusChange }) {
+        const record = buildLogRecord();
+        const labelKey = String(record.unitNumber || "").trim();
+        if (!labelKey) throw new Error("Missing label number.");
+        const requestId = allowDuplicate ? createPrintRequestId() : null;
+        const job = await enqueuePrintJob({
+            labelKey,
+            record,
+            allowDuplicate,
+            requestId,
+        });
+        await waitForPrintJobStart({
+            labelKey,
+            jobId: job.jobId,
+            initialStatus: job.status,
+            onStatusChange,
+        });
+        return { labelKey, jobId: job.jobId };
+    }
+
+    function handleQueueError(err) {
+        if (!err || !err.code) return false;
+        if (err.code === "job_completed") {
+            alert("This label was already printed.");
+            return true;
+        }
+        if (err.code === "job_timeout") {
+            alert("Print queue timed out. Please try again.");
+            return true;
+        }
+        if (err.code === "job_failed") {
+            alert("Print queue could not start. Please try again.");
+            return true;
+        }
+        if (err.code === "job_missing") {
+            alert("Print job no longer exists. Please try again.");
+            return true;
+        }
+        return false;
+    }
+
     const printBtn = document.getElementById("printBtn");
     let printInFlight = false;
     if (printBtn)
@@ -125,43 +173,104 @@ export function initPreviewStep() {
         // Ensure the displayed number is based on the current product/context.
         await refreshUnitNumberIfNeeded();
         renderPreview();
-        await openPrintDialog(getDesiredPrintCopies());
+        let queueJob = null;
+        let stopLease = null;
+        let printError = null;
+        let logError = null;
+
         try {
-            await appendLogRecord();
-            appendHistoryRecord();
-            // Use the displayed unit number as the committed one
-            const committed = state.unitNumber;
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
-            // Save snapshot of what was printed for reprint
-            const printedAt = new Date().toISOString();
-            state.lastPrinted = {
-                printedAt,
-                unitNumber: committed,
-                bigCode: state.bigCode,
-                weights: { ...state.weights },
-                source: { ...state.source },
-                activeGroup: state.activeGroup,
-            };
-            state.reprintAvailable = true;
-            // Prepare next displayed number by reading from Firebase
-            try {
-                const next = await getNextUnitNumberForPreview(group, letter);
-                state.unitNumber = next;
-            } catch (e) {
-                console.warn(
-                    "Failed to refresh next unit number from Firebase",
-                    e
-                );
-            }
+            queueJob = await beginQueuedPrint({
+                allowDuplicate: false,
+                onStatusChange: (data) => {
+                    if (!printBtn) return;
+                    if (data.status === "queued") {
+                        printBtn.textContent = "Queued...";
+                    }
+                    if (data.status === "running") {
+                        printBtn.textContent = "Printing...";
+                    }
+                },
+            });
         } catch (err) {
-            console.error("Log append failed after print", err);
-            alert("Saving log failed after printing.");
-        } finally {
-            renderPreview();
-            // Reload the app after printing completes
-            window.location.reload();
+            if (handleQueueError(err)) {
+                renderPreview();
+                return;
+            }
+            throw err;
         }
+
+        try {
+            stopLease = startPrintJobLeaseRenewal(queueJob);
+            await openPrintDialog(getDesiredPrintCopies());
+        } catch (err) {
+            printError = err;
+        }
+
+        if (!printError) {
+            try {
+                await appendLogRecord();
+                appendHistoryRecord();
+                // Use the displayed unit number as the committed one
+                const committed = state.unitNumber;
+                const group = state.activeGroup;
+                const letter = group ? state.source[group] : undefined;
+                // Save snapshot of what was printed for reprint
+                const printedAt = new Date().toISOString();
+                state.lastPrinted = {
+                    printedAt,
+                    unitNumber: committed,
+                    bigCode: state.bigCode,
+                    weights: { ...state.weights },
+                    source: { ...state.source },
+                    activeGroup: state.activeGroup,
+                };
+                state.reprintAvailable = true;
+                // Prepare next displayed number by reading from Firebase
+                try {
+                    const next = await getNextUnitNumberForPreview(group, letter);
+                    state.unitNumber = next;
+                } catch (e) {
+                    console.warn(
+                        "Failed to refresh next unit number from Firebase",
+                        e
+                    );
+                }
+            } catch (err) {
+                logError = err;
+            }
+        }
+
+        if (stopLease) stopLease();
+        if (queueJob) {
+            const outcome = printError ? "failed" : "completed";
+            const errorDetail = printError
+                ? String(printError)
+                : logError
+                ? String(logError)
+                : "";
+            try {
+                await completePrintJob({
+                    labelKey: queueJob.labelKey,
+                    jobId: queueJob.jobId,
+                    outcome,
+                    error: errorDetail,
+                });
+            } catch (err) {
+                console.warn("Failed to complete print job", err);
+            }
+        }
+
+        if (printError) {
+            throw printError;
+        }
+        if (logError) {
+            console.error("Log append failed after print", logError);
+            alert("Saving log failed after printing.");
+        }
+
+        renderPreview();
+        // Reload the app after printing completes
+        window.location.reload();
     }
 
     async function handleReprintFlow() {
@@ -184,12 +293,57 @@ export function initPreviewStep() {
         state.previewTimestamp = snapshot.printedAt;
         renderPreview();
 
+        let queueJob = null;
+        let stopLease = null;
         let printError = null;
         try {
+            queueJob = await beginQueuedPrint({
+                allowDuplicate: true,
+                onStatusChange: (data) => {
+                    if (!printBtn) return;
+                    if (data.status === "queued") {
+                        printBtn.textContent = "Queued...";
+                    }
+                    if (data.status === "running") {
+                        printBtn.textContent = "Printing...";
+                    }
+                },
+            });
+        } catch (err) {
+            if (!handleQueueError(err)) {
+                throw err;
+            }
+            state.unitNumber = previous.unitNumber;
+            state.bigCode = previous.bigCode;
+            state.weights = { ...previous.weights };
+            state.source = { ...previous.source };
+            state.activeGroup = previous.activeGroup;
+            state.previewTimestamp = previous.previewTimestamp;
+            renderPreview();
+            return;
+        }
+
+        try {
+            stopLease = startPrintJobLeaseRenewal(queueJob);
             await openPrintDialog(getDesiredPrintCopies());
         } catch (err) {
             printError = err;
         } finally {
+            if (stopLease) stopLease();
+            if (queueJob) {
+                const outcome = printError ? "failed" : "completed";
+                const errorDetail = printError ? String(printError) : "";
+                try {
+                    await completePrintJob({
+                        labelKey: queueJob.labelKey,
+                        jobId: queueJob.jobId,
+                        outcome,
+                        error: errorDetail,
+                    });
+                } catch (err) {
+                    console.warn("Failed to complete print job", err);
+                }
+            }
             state.unitNumber = previous.unitNumber;
             state.bigCode = previous.bigCode;
             state.weights = { ...previous.weights };
