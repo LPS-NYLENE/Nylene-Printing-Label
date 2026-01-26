@@ -25,7 +25,12 @@ const PR_PRODUCT_CHOICES = [
     "BS700AFOIL",
     "BS700RA",
     "BX3WQ662X",
+    "BX3WQ662X-01",
+    "BX3WQ662-02",
     "BX3WQ662",
+    "BX3RF",
+    "BX3RF-01",
+    "BX3LF",
     "BX3WQ662XBAGS",
     "BX3WQ662BAGS",
     "WASTE",
@@ -45,7 +50,6 @@ const PR_PRODUCT_CHOICES = [
     "700D-INT",
     "INT 190",
 ];
-
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
     if (back) back.addEventListener("click", () => showScreen("source"));
@@ -58,7 +62,7 @@ export function initProductsStep() {
             const active = isTwoSlotProductContext(state.activeGroup)
                 ? getActiveProductFromSlots(
                       state.productSlots,
-                      state.activeProductSlot
+                      state.activeProductSlot,
                   )
                 : state.productSlots.primary;
 
@@ -108,7 +112,7 @@ export function initProductsStep() {
         const active = isTwoSlotProductContext(state.activeGroup)
             ? getActiveProductFromSlots(
                   state.productSlots,
-                  state.activeProductSlot
+                  state.activeProductSlot,
               )
             : state.productSlots.primary;
         state.bigCode = active || "";
@@ -298,7 +302,7 @@ export function initProductsStep() {
         doneBtn.addEventListener("click", () => {
             const active = getActiveProductFromSlots(
                 state.productSlots,
-                state.activeProductSlot
+                state.activeProductSlot,
             );
             if (!active) {
                 if (productsModalErrorEl)
