@@ -46,6 +46,8 @@ export function buildLogRecord() {
         netKg: lbToKg(Number(state.weights.netLb || 0)),
         tareLb: Number(state.weights.tareLb || 0),
         tareKg: lbToKg(Number(state.weights.tareLb || 0)),
+        reissueOriginalUnit:
+            state.reissueFlag === "RI" ? state.reissueOriginalUnit || "" : "",
         reissueFlag: state.reissueFlag === "RI" ? "RI" : "",
     };
 }
@@ -89,7 +91,8 @@ async function appendToExcelFile(fileHandle, logs) {
         const ws = wb.Sheets[wsName];
         const existing = XLSX.utils.sheet_to_json(ws);
         const merged = mergeByTimestamp(existing, logs);
-        const newWs = XLSX.utils.json_to_sheet(merged);
+        const ordered = orderRecordsForExcel(merged);
+        const newWs = XLSX.utils.json_to_sheet(ordered);
         wb.Sheets[wsName] = newWs;
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -97,7 +100,8 @@ async function appendToExcelFile(fileHandle, logs) {
         await writable.close();
     } catch (e) {
         const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(logs);
+        const ordered = orderRecordsForExcel(logs);
+        const ws = XLSX.utils.json_to_sheet(ordered);
         XLSX.utils.book_append_sheet(wb, ws, "Logs");
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -119,6 +123,63 @@ function mergeByTimestamp(existingRows, newRows) {
         }
     }
     return merged;
+}
+
+function normalizeUnitNumber(value) {
+    return String(value || "").trim().toUpperCase();
+}
+
+function isReissueRecord(record) {
+    return String(record?.reissueFlag || "").toUpperCase() === "RI";
+}
+
+function orderRecordsForExcel(records) {
+    if (!Array.isArray(records)) return [];
+    const decorated = records.map((rec, index) => ({ rec, index }));
+    decorated.sort((a, b) => {
+        const at = String(a.rec?.timestamp || "");
+        const bt = String(b.rec?.timestamp || "");
+        const cmp = at.localeCompare(bt);
+        if (cmp !== 0) return cmp;
+        return a.index - b.index;
+    });
+
+    const baseRecords = [];
+    const reissuesByOriginal = new Map();
+    const reissuesInOrder = [];
+    for (const { rec } of decorated) {
+        const isReissue = isReissueRecord(rec);
+        const originalKey = normalizeUnitNumber(rec?.reissueOriginalUnit);
+        if (isReissue && originalKey) {
+            if (!reissuesByOriginal.has(originalKey))
+                reissuesByOriginal.set(originalKey, []);
+            reissuesByOriginal.get(originalKey).push(rec);
+            reissuesInOrder.push(rec);
+        } else {
+            baseRecords.push(rec);
+        }
+    }
+
+    const output = [];
+    const attached = new Set();
+    const usedOriginals = new Set();
+    for (const rec of baseRecords) {
+        output.push(rec);
+        const unitKey = normalizeUnitNumber(rec?.unitNumber);
+        if (!unitKey || usedOriginals.has(unitKey)) continue;
+        const reissues = reissuesByOriginal.get(unitKey);
+        if (reissues && reissues.length) {
+            reissues.forEach((r) => attached.add(r));
+            output.push(...reissues);
+        }
+        usedOriginals.add(unitKey);
+    }
+
+    for (const rec of reissuesInOrder) {
+        if (!attached.has(rec)) output.push(rec);
+    }
+
+    return output;
 }
 
 export function bindExcelButton() {
@@ -146,7 +207,8 @@ export function bindExcelButton() {
 
             // Always fetch from Firebase and download an Excel immediately
             const firebaseLogs = await fetchAllPrintsFromFirebase();
-            const rows = firebaseLogs.map(formatForMasExcel);
+            const ordered = orderRecordsForExcel(firebaseLogs);
+            const rows = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
             XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
@@ -159,7 +221,8 @@ export function bindExcelButton() {
                 "Firebase export failed, falling back to local logs",
                 e
             );
-            const logs = loadLogs().map(formatForMasExcel);
+            const ordered = orderRecordsForExcel(loadLogs());
+            const logs = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
             XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
@@ -175,7 +238,8 @@ export function bindExcelButton() {
         exportBtn.addEventListener("click", async () => {
             try {
                 const firebaseLogs = await fetchAllPrintsFromFirebase();
-                const rows = firebaseLogs.map(formatForMasExcel);
+                const ordered = orderRecordsForExcel(firebaseLogs);
+                const rows = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
                 XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
@@ -188,7 +252,8 @@ export function bindExcelButton() {
                     "Firebase export failed, falling back to local logs",
                     e
                 );
-                const logs = loadLogs().map(formatForMasExcel);
+                const ordered = orderRecordsForExcel(loadLogs());
+                const logs = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
                 XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
@@ -213,9 +278,9 @@ export function bindExcelButton() {
                     "Cloud export failed, falling back to local export",
                     e
                 );
-                const logs = loadLogs();
+                const ordered = orderRecordsForExcel(loadLogs());
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(logs);
+                const ws = XLSX.utils.json_to_sheet(ordered);
                 XLSX.utils.book_append_sheet(wb, ws, "Logs");
                 XLSX.writeFile(
                     wb,

@@ -1,9 +1,4 @@
 import { state, showScreen } from "../state.js";
-import {
-    generateUnitNumberFromFirebase,
-    generateCoperionUnitNumberFromFirebase,
-    generateCompoundBagsUnitNumberFromFirebase,
-} from "../utils/generators.js";
 import { fetchAllPrintsFromFirebase } from "../firebase-db.js";
 import { loadLogs } from "../logs.js";
 import { parseNumber } from "../utils/format.js";
@@ -19,6 +14,7 @@ export function initReissueFlow() {
     const searchError = document.getElementById("reissueSearchError");
 
     const editModal = document.getElementById("reissueEditModal");
+    const editUnitNumber = document.getElementById("reissueUnitNumber");
     const editProduct = document.getElementById("reissueProduct");
     const editNet = document.getElementById("reissueNet");
     const editGross = document.getElementById("reissueGross");
@@ -76,6 +72,7 @@ export function initReissueFlow() {
             editOriginal.textContent = `Original box: ${record.unitNumber || ""}`;
         if (editSourceMeta)
             editSourceMeta.textContent = buildSourceMeta(record);
+        if (editUnitNumber) editUnitNumber.value = record.unitNumber || "";
         if (editProduct) editProduct.value = record.product || "";
         if (editNet) editNet.value = String(record.netLb ?? "");
         if (editGross) editGross.value = String(record.grossLb ?? "");
@@ -129,13 +126,6 @@ export function initReissueFlow() {
         return localMatches.length ? localMatches[localMatches.length - 1] : null;
     }
 
-    function isCompoundBagsContext(sourceGroup, productCode) {
-        const group = String(sourceGroup || "").toLowerCase();
-        if (group !== "compound") return false;
-        const code = String(productCode || "").trim().toLowerCase();
-        return code.endsWith("bags");
-    }
-
     async function handleSearch() {
         const input = normalizeUnit(searchInput?.value || "");
         if (!input) {
@@ -162,9 +152,14 @@ export function initReissueFlow() {
 
     async function handleConfirmEdit() {
         if (!activeRecord) return;
+        const unit = normalizeUnit(editUnitNumber?.value || "");
         const product = String(editProduct?.value || "").trim();
         const netRaw = String(editNet?.value || "").trim();
         const grossRaw = String(editGross?.value || "").trim();
+        if (!unit) {
+            setEditError("Enter a box number.");
+            return;
+        }
         if (!product) {
             setEditError("Enter a product.");
             return;
@@ -192,26 +187,7 @@ export function initReissueFlow() {
             return;
         }
 
-        let newUnit = "";
-        try {
-            if (isCoperion) {
-                newUnit = await generateCoperionUnitNumberFromFirebase();
-            } else if (isCompoundBagsContext(sourceGroup, product)) {
-                newUnit = await generateCompoundBagsUnitNumberFromFirebase(
-                    sourceGroup,
-                    sourceLetter
-                );
-            } else {
-                newUnit = await generateUnitNumberFromFirebase(
-                    sourceGroup,
-                    sourceLetter
-                );
-            }
-        } catch (e) {
-            console.warn("Failed to generate reissue unit number", e);
-            setEditError("Failed to generate a new box number. Try again.");
-            return;
-        }
+        const newUnit = unit;
 
         state.isCoperion = isCoperion;
         if (sourceGroup) state.activeGroup = sourceGroup;
