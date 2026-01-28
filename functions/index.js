@@ -7,18 +7,74 @@ const XLSX = require('xlsx');
 
 admin.initializeApp();
 
+function normalizeUnitNumber(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function isReissueRecord(record) {
+  return String(record && record.reissueFlag ? record.reissueFlag : '').toUpperCase() === 'RI';
+}
+
+function orderRecordsForExcel(records) {
+  if (!Array.isArray(records)) return [];
+  const decorated = records.map((rec, index) => ({ rec, index }));
+  decorated.sort((a, b) => {
+    const at = String((a.rec && a.rec.timestamp) || '');
+    const bt = String((b.rec && b.rec.timestamp) || '');
+    const cmp = at.localeCompare(bt);
+    if (cmp !== 0) return cmp;
+    return a.index - b.index;
+  });
+
+  const baseRecords = [];
+  const reissuesByOriginal = new Map();
+  const reissuesInOrder = [];
+  for (const { rec } of decorated) {
+    const isReissue = isReissueRecord(rec);
+    const originalKey = normalizeUnitNumber(rec && rec.reissueOriginalUnit);
+    if (isReissue && originalKey) {
+      if (!reissuesByOriginal.has(originalKey)) reissuesByOriginal.set(originalKey, []);
+      reissuesByOriginal.get(originalKey).push(rec);
+      reissuesInOrder.push(rec);
+    } else {
+      baseRecords.push(rec);
+    }
+  }
+
+  const output = [];
+  const attached = new Set();
+  const usedOriginals = new Set();
+  for (const rec of baseRecords) {
+    output.push(rec);
+    const unitKey = normalizeUnitNumber(rec && rec.unitNumber);
+    if (!unitKey || usedOriginals.has(unitKey)) continue;
+    const reissues = reissuesByOriginal.get(unitKey);
+    if (reissues && reissues.length) {
+      reissues.forEach((r) => attached.add(r));
+      output.push(...reissues);
+    }
+    usedOriginals.add(unitKey);
+  }
+
+  for (const rec of reissuesInOrder) {
+    if (!attached.has(rec)) output.push(rec);
+  }
+
+  return output;
+}
+
 exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, async (req, res) => {
   try {
     const db = admin.database();
     const rootSnap = await db.ref('prints').get();
 
-    const rows = [];
+    const records = [];
     if (rootSnap.exists()) {
       rootSnap.forEach((daySnap) => {
         const dayKey = daySnap.key; // YYYY-MM-DD
         daySnap.forEach((printSnap) => {
           const d = printSnap.val() || {};
-          rows.push({
+          records.push({
             id: printSnap.key,
             day: dayKey || '',
             timestamp: d.timestamp || '',
@@ -34,12 +90,31 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
             netKg: d.netKg ?? '',
             tareLb: d.tareLb ?? '',
             tareKg: d.tareKg ?? '',
+            reissueFlag: d.reissueFlag || '',
+            reissueOriginalUnit: d.reissueOriginalUnit || '',
           });
         });
       });
     }
 
-    rows.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+    const ordered = orderRecordsForExcel(records);
+    const rows = ordered.map((rec) => ({
+      id: rec.id,
+      day: rec.day,
+      timestamp: rec.timestamp,
+      unitNumber: rec.unitNumber,
+      product: rec.product,
+      materialNumber: rec.materialNumber,
+      sourceGroup: rec.sourceGroup,
+      sourceLetter: rec.sourceLetter,
+      special: rec.special,
+      grossLb: rec.grossLb,
+      grossKg: rec.grossKg,
+      netLb: rec.netLb,
+      netKg: rec.netKg,
+      tareLb: rec.tareLb,
+      tareKg: rec.tareKg,
+    }));
 
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(rows, {
