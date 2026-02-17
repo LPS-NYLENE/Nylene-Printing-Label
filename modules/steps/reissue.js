@@ -1,7 +1,6 @@
 import { state, showScreen } from "../state.js";
-import { fetchAllPrintsFromFirebase } from "../firebase-db.js";
-import { loadLogs } from "../logs.js";
 import { parseNumber } from "../utils/format.js";
+import { findLatestPrintRecordByUnit } from "../utils/print-records.js";
 
 const REISSUE_FLAG = "RI";
 
@@ -36,6 +35,7 @@ export function initReissueFlow() {
     function resetReissueState() {
         state.reissueFlag = "";
         state.reissueOriginalUnit = null;
+        state.reissueFlowType = null;
         state.lockUnitNumberOnce = false;
     }
 
@@ -107,25 +107,6 @@ export function initReissueFlow() {
         }
     }
 
-    async function findRecordByUnit(unit) {
-        const normalized = normalizeUnit(unit);
-        if (!normalized) return null;
-        try {
-            const rows = await fetchAllPrintsFromFirebase();
-            const matches = rows.filter(
-                (r) => normalizeUnit(r.unitNumber) === normalized
-            );
-            if (matches.length) return matches[matches.length - 1];
-        } catch (e) {
-            console.warn("Firebase search failed, falling back to local logs", e);
-        }
-        const local = loadLogs();
-        const localMatches = local.filter(
-            (r) => normalizeUnit(r.unitNumber) === normalized
-        );
-        return localMatches.length ? localMatches[localMatches.length - 1] : null;
-    }
-
     async function handleSearch() {
         const input = normalizeUnit(searchInput?.value || "");
         if (!input) {
@@ -137,7 +118,7 @@ export function initReissueFlow() {
             searchBtn.disabled = true;
             searchBtn.textContent = "Searching...";
         }
-        const record = await findRecordByUnit(input);
+        const record = await findLatestPrintRecordByUnit(input);
         if (searchBtn) {
             searchBtn.disabled = false;
             searchBtn.textContent = "Search";
@@ -205,6 +186,7 @@ export function initReissueFlow() {
         state.previewTimestamp = null;
         state.reissueFlag = REISSUE_FLAG;
         state.reissueOriginalUnit = originalUnit || null;
+        state.reissueFlowType = "existing";
         state.lockUnitNumberOnce = true;
         state.reprintAvailable = false;
         state.lastPrinted = null;
