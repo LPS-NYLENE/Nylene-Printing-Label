@@ -87,6 +87,18 @@ export function initWeightsStep() {
     const clearBtn = document.getElementById("clearWeights");
     if (clearBtn)
         clearBtn.addEventListener("click", () => {
+            // During "Reissue New Boxx" flow, Clear cancels the ticket and returns home.
+            if (state.reissueFlowType === "new") {
+                state.reissueFlag = "";
+                state.reissueOriginalUnit = null;
+                state.reissueFlowType = null;
+                state.lockUnitNumberOnce = false;
+                state.reprintAvailable = false;
+                state.lastPrinted = null;
+                state.previewTimestamp = null;
+                showScreen("source");
+                return;
+            }
             if (inputNet) inputNet.value = "";
             if (inputGross) inputGross.value = "";
             if (inputTare) inputTare.value = "";

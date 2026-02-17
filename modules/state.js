@@ -27,6 +27,11 @@ export const state = {
     // Flag and metadata for reissue flow
     reissueFlag: "",
     reissueOriginalUnit: null,
+    // Distinguish between existing-label reissue vs new-box reissue flows.
+    // - null: not in a reissue flow
+    // - "existing": reissue an existing label (password not required)
+    // - "new": create/reissue a label for a lot not yet in system (password required)
+    reissueFlowType: null,
     // Prevents preview from overwriting a newly generated reissue unit number
     lockUnitNumberOnce: false,
 };
