@@ -5,6 +5,15 @@ import {
     generateCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { lbToKg } from "../utils/format.js";
+import {
+    confirmYesNo,
+    promptForLotNumber,
+    promptForPassword,
+} from "../utils/operator-prompts.js";
+import {
+    normalizeUnitNumber,
+    parseSourceFromPrefix,
+} from "../utils/unit-number.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
@@ -20,19 +29,30 @@ export function initPreviewStep() {
     function updateModifyButtonVisibility() {
         const back = document.getElementById("backToWeights");
         if (!back) return;
-        // During reissue flow, preview should not offer "Modify".
-        const isReissue = state.reissueFlag === "RI";
-        back.style.display = isReissue ? "none" : "";
+        // For existing-label reissues, preview should not offer "Modify".
+        const isExistingReissue = state.reissueFlowType === "existing";
+        back.style.display = isExistingReissue ? "none" : "";
     }
 
     const back = document.getElementById("backToWeights");
-    if (back) back.addEventListener("click", () => showScreen("weights"));
+    if (back)
+        back.addEventListener("click", () => {
+            if (state.reissueFlowType === "new") {
+                void handleReissueModify();
+                return;
+            }
+            showScreen("weights");
+        });
 
     const clear = document.getElementById("clearPreview");
     if (clear)
         clear.addEventListener("click", () => {
-            state.unitNumber = state.unitNumber; // keep same by default/
-            updatePreview();
+            if (state.reissueFlowType) {
+                resetReissueAndReturnHome();
+                return;
+            }
+            // Keep same values; just re-render/refresh preview.
+            document.dispatchEvent(new CustomEvent("updatePreview"));
         });
 
     // Determine how many copies should be printed for the current product
@@ -128,6 +148,61 @@ export function initPreviewStep() {
                 printInFlight = false;
             }
         });
+
+    function resetReissueAndReturnHome() {
+        state.reissueFlag = "";
+        state.reissueOriginalUnit = null;
+        state.reissueFlowType = null;
+        state.lockUnitNumberOnce = false;
+        state.reprintAvailable = false;
+        state.lastPrinted = null;
+        state.previewTimestamp = null;
+        showScreen("source");
+    }
+
+    async function handleReissueModify() {
+        const authed = await promptForPassword({
+            title: "Enter password",
+            expected: "NYLENE",
+        });
+        if (!authed) return;
+
+        const entered = await promptForLotNumber({
+            title: "Enter Lot number",
+            initialValue: state.unitNumber || "",
+        });
+        if (!entered) return;
+
+        const unit = normalizeUnitNumber(entered);
+        const ok = await confirmYesNo({
+            title: "Confirm lot number",
+            message: `Do you wish to continue with ${unit}?`,
+            yesText: "Yes",
+            noText: "No",
+        });
+        if (!ok) return;
+
+        const prefix = unit.slice(0, 2);
+        const parsed = parseSourceFromPrefix(prefix);
+        if (!parsed) {
+            alert("Invalid lot number source prefix.");
+            return;
+        }
+
+        const previous = normalizeUnitNumber(state.unitNumber);
+        state.isCoperion = false;
+        state.activeGroup = parsed.group;
+        state.source[parsed.group] = parsed.letter;
+        state.source.special = null;
+        state.unitNumber = unit;
+        state.lockUnitNumberOnce = true;
+        state.reissueFlag = "RI";
+        state.reissueOriginalUnit = previous || unit;
+        state.reissueFlowType = "new";
+
+        document.dispatchEvent(new CustomEvent("updatePreview"));
+        showScreen("preview");
+    }
 
     async function handleInitialPrintFlow() {
         // Ensure the displayed number is based on the current product/context.
@@ -394,6 +469,8 @@ export function initPreviewStep() {
             printBtn.textContent =
                 state.reprintAvailable && state.lastPrinted
                     ? "Reprint"
-                    : "Print";
+                    : state.reissueFlowType
+                      ? "Reissue"
+                      : "Print";
     }
 }

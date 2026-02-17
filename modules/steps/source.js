@@ -3,6 +3,7 @@ import { generateUnitNumberFromFirebase } from "../utils/generators.js";
 import { loadLogs } from "../logs.js";
 import { getAppInstance } from "../firebase-db.js";
 import { initReissueFlow } from "./reissue.js";
+import { initReissueNewFlow } from "./reissue-new.js";
 import {
     getAuth,
     signOut,
@@ -12,6 +13,7 @@ export function initSourceStep() {
     function clearReissueState() {
         state.reissueFlag = "";
         state.reissueOriginalUnit = null;
+        state.reissueFlowType = null;
         state.lockUnitNumberOnce = false;
     }
 
@@ -212,4 +214,5 @@ export function initSourceStep() {
         });
 
     initReissueFlow();
+    initReissueNewFlow();
 }

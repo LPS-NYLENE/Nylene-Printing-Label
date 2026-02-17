@@ -35,7 +35,7 @@
         <button id="btnReissue" class="btn secondary">
             Reissue Existing Box
         </button>
-        <button id="" class="btn secondary">Reissue New Boxx</button>
+        <button id="btnReissueNew" class="btn secondary">Reissue New Boxx</button>
         <button id="btnLogout" class="btn tertiary">Log out</button>
         <div class="spacer"></div>
         <div class="right-buttons">
@@ -139,6 +139,127 @@
                 </button>
                 <div class="spacer"></div>
                 <button id="reissueConfirm" class="btn primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reissue New Boxx: lot entry -->
+    <div id="reissueNewModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Enter lot number for reissue</h3>
+            <div class="form" style="margin-top: 12px">
+                <label>
+                    SOURCE
+                    <input
+                        id="reissueNewSource"
+                        type="text"
+                        placeholder="AD"
+                        autocomplete="off"
+                    />
+                </label>
+                <label>
+                    YEAR
+                    <input
+                        id="reissueNewYear"
+                        type="number"
+                        inputmode="numeric"
+                        placeholder="2025"
+                    />
+                </label>
+                <label>
+                    DAY
+                    <input
+                        id="reissueNewDay"
+                        type="number"
+                        inputmode="numeric"
+                        placeholder="324"
+                    />
+                </label>
+                <label>
+                    BOX #
+                    <input
+                        id="reissueNewBox"
+                        type="number"
+                        inputmode="numeric"
+                        placeholder="003"
+                    />
+                </label>
+            </div>
+            <div
+                id="reissueNewError"
+                class="form-error"
+                role="alert"
+                aria-live="polite"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="reissueNewClear" class="btn secondary">Clear</button>
+                <div class="spacer"></div>
+                <button id="reissueNewManualEntry" class="btn secondary">
+                    Manual Entry
+                </button>
+                <button id="reissueNewSearch" class="btn primary">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared operator prompts (used by Reissue New + Preview Modify) -->
+    <div id="operatorPasswordModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3 id="operatorPasswordTitle">Enter password</h3>
+            <input
+                id="operatorPasswordInput"
+                type="password"
+                placeholder="Password"
+                style="padding: 10px"
+            />
+            <div
+                id="operatorPasswordError"
+                class="muted-text"
+                style="color: #b00020; margin-top: 8px"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="operatorPasswordCancel" class="btn secondary">
+                    Cancel
+                </button>
+                <div class="spacer"></div>
+                <button id="operatorPasswordConfirm" class="btn primary">
+                    Enter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="operatorLotModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3 id="operatorLotTitle">Enter lot number</h3>
+            <input
+                id="operatorLotInput"
+                type="text"
+                placeholder="AD15324003"
+                style="padding: 10px"
+                autocomplete="off"
+            />
+            <div
+                id="operatorLotError"
+                class="muted-text"
+                style="color: #b00020; margin-top: 8px"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="operatorLotCancel" class="btn secondary">Cancel</button>
+                <div class="spacer"></div>
+                <button id="operatorLotConfirm" class="btn primary">Enter</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="operatorConfirmModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3 id="operatorConfirmTitle">Confirm</h3>
+            <div id="operatorConfirmMessage" style="margin-top: 8px"></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="operatorConfirmNo" class="btn secondary">No</button>
+                <div class="spacer"></div>
+                <button id="operatorConfirmYes" class="btn primary">Yes</button>
             </div>
         </div>
     </div>
