@@ -218,6 +218,13 @@ body {
     border: 1px solid #c7d3d1;
     font-size: 20px;
 }
+.form select {
+    padding: 14px 12px;
+    border-radius: 8px;
+    border: 1px solid #c7d3d1;
+    font-size: 20px;
+    background: #fff;
+}
 .row {
     display: flex;
     gap: 12px;

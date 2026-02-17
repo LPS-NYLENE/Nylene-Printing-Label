@@ -11,45 +11,10 @@ import {
     BLANK_PRODUCT_LABEL,
 } from "../state.js";
 
-// Default fallback when no prior selection exists for a contextt
-const PR_DEFAULT_PRODUCT = "CSDN-INT";
-
-// Allowed products for P&R (from provided list
-const PR_PRODUCT_CHOICES = [
-    "CSDN-INT",
-    "BS700D",
-    "BS640T",
-    "BS640A",
-    "BS640AFOIL",
-    "BS600CSDN",
-    "BS700AFOIL",
-    "BS700RA",
-    "BX3WQ662X",
-    "BX3WQ662X-01",
-    "BX3WQ662-02",
-    "BX3WQ662",
-    "BX3RF",
-    "BX3RF-01",
-    "BX3LF",
-    "BX3WQ662XBAGS",
-    "BX3WQ662BAGS",
-    "WASTE",
-    "OLIGOMERS",
-    "SLUDGE",
-    "UNEXT-CHIP",
-    "CAPRO",
-    "BS700R80",
-    "BS640UX",
-    "BX3RF",
-    "PA6-205",
-    "BS700A",
-    "BX3WQ662X-02BAGS",
-    "L-195-1",
-    "L-195-2",
-    "L-196",
-    "700D-INT",
-    "INT 190",
-];
+import {
+    PR_DEFAULT_PRODUCT,
+    PR_PRODUCT_CHOICES,
+} from "../catalog/product-choices.js";
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
     if (back) back.addEventListener("click", () => showScreen("source"));

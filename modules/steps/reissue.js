@@ -1,6 +1,10 @@
 import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { findLatestPrintRecordByUnit } from "../utils/print-records.js";
+import {
+    COPERION_PRODUCT_CHOICES,
+    PR_PRODUCT_CHOICES,
+} from "../catalog/product-choices.js";
 
 const REISSUE_FLAG = "RI";
 
@@ -30,6 +34,46 @@ export function initReissueFlow() {
 
     function normalizeUnit(value) {
         return String(value || "").trim().toUpperCase();
+    }
+
+    function isCoperionRecord(record) {
+        const productLine = String(record?.productLine || "");
+        const unit = normalizeUnit(record?.unitNumber || "");
+        return productLine === "Coperion" || unit.startsWith("EA1");
+    }
+
+    function setReissueProductOptions({ isCoperion, currentValue }) {
+        if (!editProduct) return;
+        const current = String(currentValue || "").trim();
+        const base = isCoperion ? COPERION_PRODUCT_CHOICES : PR_PRODUCT_CHOICES;
+
+        // Ensure current value is selectable even if it's not in the current list.
+        const seen = new Set();
+        const choices = [];
+        [current, ...base].forEach((p) => {
+            const value = String(p || "").trim();
+            if (!value) return;
+            if (seen.has(value)) return;
+            seen.add(value);
+            choices.push(value);
+        });
+
+        editProduct.innerHTML = "";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Select a product…";
+        placeholder.disabled = true;
+        editProduct.appendChild(placeholder);
+
+        choices.forEach((prod) => {
+            const opt = document.createElement("option");
+            opt.value = prod;
+            opt.textContent = prod;
+            editProduct.appendChild(opt);
+        });
+
+        editProduct.value = current && seen.has(current) ? current : "";
     }
 
     function resetReissueState() {
@@ -73,7 +117,10 @@ export function initReissueFlow() {
         if (editSourceMeta)
             editSourceMeta.textContent = buildSourceMeta(record);
         if (editUnitNumber) editUnitNumber.value = record.unitNumber || "";
-        if (editProduct) editProduct.value = record.product || "";
+        setReissueProductOptions({
+            isCoperion: isCoperionRecord(record),
+            currentValue: record.product || "",
+        });
         if (editNet) editNet.value = String(record.netLb ?? "");
         if (editGross) editGross.value = String(record.grossLb ?? "");
         updateTareFromInputs();
