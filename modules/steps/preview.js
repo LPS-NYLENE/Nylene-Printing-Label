@@ -17,6 +17,14 @@ export function initPreviewStep() {
     });
     void handleUpdatePreview();
 
+    function updateModifyButtonVisibility() {
+        const back = document.getElementById("backToWeights");
+        if (!back) return;
+        // During reissue flow, preview should not offer "Modify".
+        const isReissue = state.reissueFlag === "RI";
+        back.style.display = isReissue ? "none" : "";
+    }
+
     const back = document.getElementById("backToWeights");
     if (back) back.addEventListener("click", () => showScreen("weights"));
 
@@ -298,6 +306,7 @@ export function initPreviewStep() {
     }
 
     function renderPreview() {
+        updateModifyButtonVisibility();
         const now = state.previewTimestamp
             ? new Date(state.previewTimestamp)
             : new Date();
