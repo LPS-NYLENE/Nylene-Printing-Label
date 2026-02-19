@@ -21,6 +21,7 @@ export function initProductsStep() {
 
     const proceed = document.getElementById("btnProceedWeights");
     const productsErrorEl = document.getElementById("productsError");
+    const hintEl = document.getElementById("productsHint");
     if (proceed) {
         proceed.addEventListener("click", () => {
             // Guard against BLANK being the active selection (represented as null/empty).
@@ -70,6 +71,8 @@ export function initProductsStep() {
     const doneBtn = document.getElementById("prDone");
     const cancelProductsBtn = document.getElementById("prCancelProducts");
     const choicesEl = document.getElementById("prProductChoices");
+    const inlineWrap = document.getElementById("productInlineChoicesWrap");
+    const inlineChoicesEl = document.getElementById("productInlineChoices");
 
     // Per-context storage helpers are centralized in state.js
 
@@ -83,6 +86,21 @@ export function initProductsStep() {
         state.bigCode = active || "";
         // Keep legacy field in sync (best-effort).
         state.selectedProduct = active || null;
+    }
+
+    function isInlineSelectionMode() {
+        // Only the reissue-new flow requires an operator password already,
+        // so we can show all products directly on the page without an extra unlock step.
+        return state.reissueFlowType === "new";
+    }
+
+    function setInlineSelectionModeUI(on) {
+        if (hintEl)
+            hintEl.textContent = on
+                ? "Select a product."
+                : "Only one product is shown by default.";
+        if (inlineWrap) inlineWrap.classList.toggle("hidden", !on);
+        if (changeBtn) changeBtn.classList.toggle("hidden", on);
     }
 
     function ensureContextAndDefaultProduct() {
@@ -163,13 +181,74 @@ export function initProductsStep() {
         setProceedEnabled(!!state.productSlots.primary);
     }
 
+    function renderInlineChoices() {
+        if (!inlineChoicesEl) return;
+        inlineChoicesEl.innerHTML = "";
+
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : null;
+        const isTwoSlot = isTwoSlotProductContext(group);
+        const activeSlot =
+            state.activeProductSlot === "secondary" ? "secondary" : "primary";
+        const current =
+            activeSlot === "primary"
+                ? state.productSlots.primary
+                : state.productSlots.secondary;
+
+        const list = isTwoSlot
+            ? [BLANK_PRODUCT_LABEL, ...PR_PRODUCT_CHOICES]
+            : PR_PRODUCT_CHOICES.slice();
+
+        list.forEach((prod) => {
+            const btn = document.createElement("button");
+            const isBlank = String(prod).toUpperCase() === BLANK_PRODUCT_LABEL;
+            const isSelected = isBlank
+                ? !current
+                : String(current || "") === String(prod);
+            btn.className = "btn product-btn" + (isSelected ? " selected" : "");
+            btn.textContent = prod;
+            btn.addEventListener("click", () => {
+                if (productsErrorEl) productsErrorEl.textContent = "";
+
+                if (!isTwoSlot) {
+                    state.productSlots = { primary: prod, secondary: null };
+                    state.activeProductSlot = "primary";
+                    state.selectedProduct = prod;
+                    state.bigCode = prod;
+                    saveProductForContext(group, letter, prod);
+                    renderProducts();
+                    return;
+                }
+
+                if (activeSlot === "primary" && isBlank) {
+                    if (productsErrorEl)
+                        productsErrorEl.textContent =
+                            "Select another product that is not BLANK";
+                    return;
+                }
+
+                if (activeSlot === "primary") {
+                    state.productSlots.primary = isBlank ? null : prod;
+                } else {
+                    state.productSlots.secondary = isBlank ? null : prod;
+                }
+                saveProductSlotsForContext(group, letter, state.productSlots);
+                syncBigCodeToActiveSlot();
+                renderProducts();
+            });
+            inlineChoicesEl.appendChild(btn);
+        });
+    }
+
     function renderProducts() {
         if (productsErrorEl) productsErrorEl.textContent = "";
-        if (isTwoSlotProductContext(state.activeGroup)) {
-            renderTwoSlotProducts();
-        } else {
-            renderOneSlotProduct();
-        }
+        const inline = isInlineSelectionMode();
+        setInlineSelectionModeUI(inline);
+
+        if (isTwoSlotProductContext(state.activeGroup)) renderTwoSlotProducts();
+        else renderOneSlotProduct();
+
+        if (inline) renderInlineChoices();
     }
 
     function openModal() {
