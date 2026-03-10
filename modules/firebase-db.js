@@ -16,14 +16,25 @@ import {
     get,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
+// const firebaseConfig = {
+//     apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
+//     authDomain: "nylene-label-printer.firebaseapp.com",
+//     databaseURL: "https://nylene-label-printer-default-rtdb.firebaseio.com",
+//     projectId: "nylene-label-printer",
+//     storageBucket: "nylene-label-printer.firebasestorage.app",
+//     messagingSenderId: "906222982085",
+//     appId: "1:906222982085:web:5c9808ced0307256c0b1ac",
+// };
+
 const firebaseConfig = {
-    apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
-    authDomain: "nylene-label-printer.firebaseapp.com",
-    databaseURL: "https://nylene-label-printer-default-rtdb.firebaseio.com",
-    projectId: "nylene-label-printer",
-    storageBucket: "nylene-label-printer.firebasestorage.app",
-    messagingSenderId: "906222982085",
-    appId: "1:906222982085:web:5c9808ced0307256c0b1ac",
+    apiKey: "AIzaSyDy_2NzV6xyPMG5y-dFuzbMIWK9hAr1Lmo",
+    authDomain: "nylene-lps.firebaseapp.com",
+    databaseURL: "https://nylene-lps-default-rtdb.firebaseio.com",
+    projectId: "nylene-lps",
+    storageBucket: "nylene-lps.firebasestorage.app",
+    messagingSenderId: "624720595566",
+    appId: "1:624720595566:web:aaacaacab430485ff3747f",
+    measurementId: "G-T0HNVBN16F",
 };
 
 export function getAppInstance() {
