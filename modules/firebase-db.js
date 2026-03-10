@@ -84,7 +84,7 @@ export async function fetchAllPrintsFromFirebase() {
         });
     }
     rows.sort((a, b) =>
-        String(a.timestamp || "").localeCompare(String(b.timestamp || ""))
+        String(a.timestamp || "").localeCompare(String(b.timestamp || "")),
     );
     return rows;
 }

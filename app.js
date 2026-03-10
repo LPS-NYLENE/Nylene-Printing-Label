@@ -231,7 +231,7 @@ function syncWeightsFromInputs() {
 
     // Tare weight is derived: tare = gross - net
     if (netRaw && grossRaw) {
-        const tareLb = +((grossLb - netLb).toFixed(1));
+        const tareLb = +(grossLb - netLb).toFixed(1);
         state.weights.tareLb = tareLb;
         if (inputTare) inputTare.value = String(tareLb);
     } else {
@@ -266,9 +266,9 @@ function updatePreview() {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, "0");
     const stamp = `${pad(now.getMonth() + 1)}/${pad(
-        now.getDate()
+        now.getDate(),
     )}/${now.getFullYear()} ${pad(now.getHours())}:${pad(
-        now.getMinutes()
+        now.getMinutes(),
     )}:${pad(now.getSeconds())}`;
     document.getElementById("pkgDate").textContent = stamp;
 
@@ -432,7 +432,7 @@ async function appendToExcelFile(fileHandle, logs) {
 
 function mergeByTimestamp(existingRows, newRows) {
     const seen = new Set(
-        existingRows.map((r) => r.timestamp + ":" + r.unitNumber)
+        existingRows.map((r) => r.timestamp + ":" + r.unitNumber),
     );
     const merged = existingRows.slice();
     for (const r of newRows) {
@@ -453,7 +453,7 @@ document.getElementById("exportLogsBtn").addEventListener("click", () => {
     XLSX.utils.book_append_sheet(wb, ws, "Logs");
     XLSX.writeFile(
         wb,
-        `label-logs-${new Date().toISOString().slice(0, 10)}.xlsx`
+        `label-logs-${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
 });
 
@@ -491,7 +491,7 @@ document.getElementById("excelBtn").addEventListener("click", async () => {
         XLSX.utils.book_append_sheet(wb, ws, "Logs");
         XLSX.writeFile(
             wb,
-            `label-logs-${new Date().toISOString().slice(0, 10)}.xlsx`
+            `label-logs-${new Date().toISOString().slice(0, 10)}.xlsx`,
         );
     }
 });
