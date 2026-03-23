@@ -336,7 +336,7 @@ export function initProductsStep() {
     if (unlockBtn)
         unlockBtn.addEventListener("click", () => {
             const val = (pwdInput && String(pwdInput.value || "").trim()) || "";
-            if (val.toUpperCase() === "NYLENE") {
+            if (val === "Nylene2026!") {
                 showChoices();
             } else {
                 if (errorEl) errorEl.textContent = "Incorrect password";
