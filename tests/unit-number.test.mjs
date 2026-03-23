@@ -11,6 +11,10 @@ test("parseSourceFromPrefix maps AD to dryer A", () => {
     assert.deepEqual(parseSourceFromPrefix("ad"), { group: "dryer", letter: "A" });
 });
 
+test("parseSourceFromPrefix maps UX to special source", () => {
+    assert.deepEqual(parseSourceFromPrefix("UX"), { group: "other", letter: "UX" });
+});
+
 test("buildUnitNumberFromParts builds expected unit number", () => {
     const res = buildUnitNumberFromParts({
         prefix: "AD",
