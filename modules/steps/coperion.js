@@ -5,7 +5,10 @@ import {
     saveProductForContext,
 } from "../state.js";
 import { getAppInstance } from "../firebase-db.js";
-import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+    getAuth,
+    signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
 
 const DEFAULT_PRODUCT = "BX3WQ662";
@@ -77,7 +80,7 @@ export function initCoperionStep() {
             } catch (e) {
                 console.warn(
                     "Failed to fetch next unit number from Firebase (coperion)",
-                    e
+                    e,
                 );
             }
         })();
