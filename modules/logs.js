@@ -7,7 +7,11 @@ import {
 } from "./firebase-db.js";
 import { getAppInstance } from "./firebase-db.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { applyExcelButtonAccess, isExcelExportAllowed } from "./access.js";
+import {
+    applyExcelButtonAccess,
+    getExcelExportButtons,
+    isExcelExportAllowed,
+} from "./access.js";
 
 const LOGS_KEY = "print_logs_v1";
 
@@ -183,8 +187,8 @@ function orderRecordsForExcel(records) {
 }
 
 export function bindExcelButton() {
-    const excelBtn = document.getElementById("excelBtn");
-    if (!excelBtn) return;
+    const excelButtons = getExcelExportButtons();
+    if (!excelButtons.length) return;
 
     // Ensure the button is hidden/disabled appropriately on first bind.
     try {
@@ -195,42 +199,46 @@ export function bindExcelButton() {
         applyExcelButtonAccess(null);
     }
 
-    excelBtn.addEventListener("click", async () => {
-        try {
-            // Safety check: enforce access even if DOM is modified.
-            const auth = getAuth(getAppInstance());
-            if (!isExcelExportAllowed(auth.currentUser)) {
-                // Keep this quiet other than a simple message.
-                alert("Not authorized to export Excel.");
-                return;
-            }
+    excelButtons.forEach((excelBtn) => {
+        if (excelBtn.dataset.excelExportBound === "true") return;
+        excelBtn.dataset.excelExportBound = "true";
+        excelBtn.addEventListener("click", async () => {
+            try {
+                // Safety check: enforce access even if DOM is modified.
+                const auth = getAuth(getAppInstance());
+                if (!isExcelExportAllowed(auth.currentUser)) {
+                    // Keep this quiet other than a simple message.
+                    alert("Not authorized to export Excel.");
+                    return;
+                }
 
-            // Always fetch from Firebase and download an Excel immediately
-            const firebaseLogs = await fetchAllPrintsFromFirebase();
-            const ordered = orderRecordsForExcel(firebaseLogs);
-            const rows = ordered.map(formatForMasExcel);
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
-            XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
-            XLSX.writeFile(
-                wb,
-                `MASOutput-${new Date().toISOString().slice(0, 10)}.xlsx`
-            );
-        } catch (e) {
-            console.warn(
-                "Firebase export failed, falling back to local logs",
-                e
-            );
-            const ordered = orderRecordsForExcel(loadLogs());
-            const logs = ordered.map(formatForMasExcel);
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
-            XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
-            XLSX.writeFile(
-                wb,
-                `MASOutput-${new Date().toISOString().slice(0, 10)}.xlsx`
-            );
-        }
+                // Always fetch from Firebase and download an Excel immediately
+                const firebaseLogs = await fetchAllPrintsFromFirebase();
+                const ordered = orderRecordsForExcel(firebaseLogs);
+                const rows = ordered.map(formatForMasExcel);
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+                XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
+                XLSX.writeFile(
+                    wb,
+                    `MASOutput-${new Date().toISOString().slice(0, 10)}.xlsx`
+                );
+            } catch (e) {
+                console.warn(
+                    "Firebase export failed, falling back to local logs",
+                    e
+                );
+                const ordered = orderRecordsForExcel(loadLogs());
+                const logs = ordered.map(formatForMasExcel);
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
+                XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
+                XLSX.writeFile(
+                    wb,
+                    `MASOutput-${new Date().toISOString().slice(0, 10)}.xlsx`
+                );
+            }
+        });
     });
 
     const exportBtn = document.getElementById("exportLogsBtn");
