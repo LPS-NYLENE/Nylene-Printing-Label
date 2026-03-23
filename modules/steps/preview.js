@@ -380,6 +380,9 @@ export function initPreviewStep() {
 
     function renderPreview() {
         updateModifyButtonVisibility();
+        const isReissuePreview =
+            Boolean(state.reissueFlowType) ||
+            String(state.reissueFlag || "").toUpperCase() === "RI";
         const now = state.previewTimestamp
             ? new Date(state.previewTimestamp)
             : new Date();
@@ -394,6 +397,10 @@ export function initPreviewStep() {
 
         const bigCode = document.getElementById("bigCode");
         if (bigCode) bigCode.textContent = state.unitNumber;
+
+        const reissueBadge = document.getElementById("reissuePreviewBadge");
+        if (reissueBadge)
+            reissueBadge.classList.toggle("hidden", !isReissuePreview);
 
         const grossLb = state.weights.grossLb;
         const netLb = state.weights.netLb;
