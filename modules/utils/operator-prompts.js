@@ -65,7 +65,7 @@ export async function confirmYesNo({
 
 export async function promptForPassword({
     title = "Enter password",
-    expected = "NYLENE",
+    expected = "Nylene2026!",
 } = {}) {
     const modal = byId("operatorPasswordModal");
     const titleEl = byId("operatorPasswordTitle");
@@ -77,7 +77,7 @@ export async function promptForPassword({
     if (!modal || !input || !cancelBtn || !confirmBtn) {
         const val = window.prompt(title, "");
         if (val == null) return false;
-        return String(val).trim().toUpperCase() === String(expected).trim().toUpperCase();
+        return String(val).trim() === String(expected).trim();
     }
 
     if (titleEl) titleEl.textContent = title;
@@ -109,7 +109,7 @@ export async function promptForPassword({
 
         const submit = () => {
             const val = String(input.value || "").trim();
-            if (val.toUpperCase() !== String(expected).trim().toUpperCase()) {
+            if (val !== String(expected).trim()) {
                 if (errorEl) errorEl.textContent = "Incorrect password";
                 input.focus();
                 return;

@@ -12,7 +12,7 @@ import {
 } from "../utils/operator-prompts.js";
 
 const REISSUE_FLAG = "RI";
-const PASSWORD_EXPECTED = "NYLENE";
+const PASSWORD_EXPECTED = "Nylene2026!";
 
 function setFromRecord(record) {
     const unit = normalizeUnitNumber(record && record.unitNumber);
