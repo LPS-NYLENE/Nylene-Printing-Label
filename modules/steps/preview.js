@@ -14,6 +14,7 @@ import {
     normalizeUnitNumber,
     parseSourceFromPrefix,
 } from "../utils/unit-number.js";
+import { buildPrintedSnapshotFromState } from "../utils/reprint-snapshot.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
@@ -23,6 +24,9 @@ export function initPreviewStep() {
         // Fire-and-forget: we refresh the unit number first, then render.
         // (Event listeners cannot be awaited by callers.)
         void handleUpdatePreview();
+    });
+    document.addEventListener("renderPreviewOnly", () => {
+        renderPreview();
     });
     void handleUpdatePreview();
 
@@ -212,20 +216,11 @@ export function initPreviewStep() {
         try {
             await appendLogRecord();
             appendHistoryRecord();
-            // Use the displayed unit number as the committed one
-            const committed = state.unitNumber;
             const group = state.activeGroup;
             const letter = group ? state.source[group] : undefined;
             // Save snapshot of what was printed for reprint
             const printedAt = new Date().toISOString();
-            state.lastPrinted = {
-                printedAt,
-                unitNumber: committed,
-                bigCode: state.bigCode,
-                weights: { ...state.weights },
-                source: { ...state.source },
-                activeGroup: state.activeGroup,
-            };
+            state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
             state.reprintAvailable = true;
             // Prepare next displayed number by reading from Firebase
             try {
@@ -254,6 +249,7 @@ export function initPreviewStep() {
             weights: { ...state.weights },
             source: { ...state.source },
             activeGroup: state.activeGroup,
+            isCoperion: state.isCoperion,
             previewTimestamp: state.previewTimestamp,
         };
 
@@ -264,6 +260,7 @@ export function initPreviewStep() {
         state.weights = { ...snapshot.weights };
         state.source = { ...snapshot.source };
         state.activeGroup = snapshot.activeGroup;
+        state.isCoperion = Boolean(snapshot.isCoperion);
         state.previewTimestamp = snapshot.printedAt;
         renderPreview();
 
@@ -278,6 +275,7 @@ export function initPreviewStep() {
             state.weights = { ...previous.weights };
             state.source = { ...previous.source };
             state.activeGroup = previous.activeGroup;
+            state.isCoperion = previous.isCoperion;
             state.previewTimestamp = previous.previewTimestamp;
             renderPreview();
         }
