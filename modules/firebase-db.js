@@ -15,6 +15,11 @@ import {
     serverTimestamp,
     get,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import {
+    getNextPrSequenceFromRecords,
+    getNextCoperionSequenceFromRecords,
+    getNextCompoundBagsSequenceFromRecords,
+} from "./utils/daily-sequence.js";
 
 // const firebaseConfig = {
 //     apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
@@ -104,7 +109,7 @@ export async function fetchAllPrintsFromFirebase() {
 // by inspecting existing prints for that day in Realtime Database.
 // Buckets were historically stored under UTC day keys; we now store under local
 // day keys. For backward compatibility, we read both local and UTC buckets.
-// Returns 1 if no prior prints exist for the day.
+// Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const app = getAppInstance();
     const db = getDatabase(app);
@@ -140,68 +145,8 @@ export async function getNextDailySequenceFromFirebase(date) {
 
     const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
     const snaps = await Promise.all(refs.map((r) => get(r)));
-
-    // For P&R: ignore any Coperion records (identified by explicit productLine or EA prefix)
-    let maxSuffix = 0;
-    let anyParseable = false;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-            const unit = String(val.unitNumber || "");
-            const productLine = String(val.productLine || "");
-            const isCoperion =
-                productLine === "Coperion" ||
-                unit.startsWith(coperionPrefixForDay);
-            if (isCoperion) return; // exclude Coperion numbers from P&R sequence calculation
-            // Exclude Compound+BAGS records from the general P&R sequence; they use
-            // a dedicated daily suffix range starting at 201.
-            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-            const product = String(val.product || "");
-            const isCompoundBags =
-                sourceGroup === "compound" &&
-                product.toLowerCase().endsWith("bags");
-            if (isCompoundBags) return;
-            const suffixStr = unit.slice(-3);
-            const n = parseInt(suffixStr, 10);
-            if (Number.isFinite(n)) {
-                anyParseable = true;
-                if (n > maxSuffix) maxSuffix = n;
-            }
-        });
-    }
-    if (anyParseable) return Math.min(999, maxSuffix + 1);
-
-    // If no parseable P&R units found inside boundary, count only P&R records to provide next number
-    let count = 0;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-            const unit = String(val.unitNumber || "");
-            const productLine = String(val.productLine || "");
-            const isCoperion =
-                productLine === "Coperion" ||
-                unit.startsWith(coperionPrefixForDay);
-            if (isCoperion) return;
-            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-            const product = String(val.product || "");
-            const isCompoundBags =
-                sourceGroup === "compound" &&
-                product.toLowerCase().endsWith("bags");
-            if (isCompoundBags) return;
-            count += 1;
-        });
-    }
-    return Math.min(999, count + 1);
+    const records = collectRecordsWithinWindow(snaps, start, end);
+    return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
 }
 
 // Helper: day-of-year (1..365/366)
@@ -216,7 +161,7 @@ function getDayOfYear(date) {
 // Rules:
 // - Prefix for Coperion: EA + 1 + last-digit-of-year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)
-// - Increments based on existing records in DB that match the day's EA prefix
+// - Increments based on existing regular (non-RI) records in DB that match the day's EA prefix
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const app = getAppInstance();
@@ -255,52 +200,15 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 
     const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
     const snaps = await Promise.all(refs.map((r) => get(r)));
-
-    let maxSuffix = 0;
-    let anyParseable = false;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-            const unit = String(val.unitNumber || "");
-            if (!unit.startsWith(prefix)) return;
-            const suffixStr = unit.slice(-3);
-            const n = parseInt(suffixStr, 10);
-            if (Number.isFinite(n)) {
-                anyParseable = true;
-                if (n > maxSuffix) maxSuffix = n;
-            }
-        });
-    }
-    if (anyParseable) return Math.min(999, maxSuffix + 1);
-
-    // If none parseable matched, count EA-prefixed records for the boundary and offset from 401
-    let count = 0;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-            const unit = String(val.unitNumber || "");
-            if (unit.startsWith(prefix)) count += 1;
-        });
-    }
-    // First of day -> 401, then 402, ... (capped at 999)
-    return Math.min(999, 401 + count);
+    const records = collectRecordsWithinWindow(snaps, start, end);
+    return getNextCoperionSequenceFromRecords(records, { prefix });
 }
 
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
 // Rules:
 // - Applies only to prints where sourceGroup === "compound" AND product ends with "BAGS"
 // - Last three digits start at 201 each new day (00:01 rule applie)
-// - Increments based on existing matching records in DB
+// - Increments based on existing regular (non-RI) matching records in DB
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const app = getAppInstance();
@@ -334,57 +242,8 @@ export async function getNextCompoundBagsSequenceFromFirebase(date) {
 
     const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
     const snaps = await Promise.all(refs.map((r) => get(r)));
-
-    let maxSuffix = 0;
-    let anyParseable = false;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-
-            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-            if (sourceGroup !== "compound") return;
-            const product = String(val.product || "");
-            if (!product.toLowerCase().endsWith("bags")) return;
-
-            const unit = String(val.unitNumber || "");
-            const suffixStr = unit.slice(-3);
-            const n = parseInt(suffixStr, 10);
-            if (Number.isFinite(n)) {
-                anyParseable = true;
-                if (n > maxSuffix) maxSuffix = n;
-            }
-        });
-    }
-
-    if (anyParseable) {
-        const next = maxSuffix >= 201 ? maxSuffix + 1 : 201;
-        return Math.min(999, next);
-    }
-
-    // If none parseable matched, count matching records for the boundary and offset from 201
-    let count = 0;
-    for (const snap of snaps) {
-        if (!snap.exists()) continue;
-        snap.forEach((child) => {
-            const val = child.val() || {};
-            const ts = val.timestamp;
-            if (!ts) return;
-            const t = new Date(ts).getTime();
-            if (!(t >= start.getTime() && t < end.getTime())) return;
-            const sourceGroup = String(val.sourceGroup || "").toLowerCase();
-            if (sourceGroup !== "compound") return;
-            const product = String(val.product || "");
-            if (!product.toLowerCase().endsWith("bags")) return;
-            count += 1;
-        });
-    }
-    // First of day -> 201, then 202, ... (capped at 999)
-    return Math.min(999, 201 + count);
+    const records = collectRecordsWithinWindow(snaps, start, end);
+    return getNextCompoundBagsSequenceFromRecords(records);
 }
 
 function parseIsoDateOrNow(value) {
@@ -409,4 +268,22 @@ function formatLocalDayKey(date) {
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
+}
+
+function collectRecordsWithinWindow(snaps, start, end) {
+    const records = [];
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+    for (const snap of snaps) {
+        if (!snap.exists()) continue;
+        snap.forEach((child) => {
+            const val = child.val() || {};
+            const ts = val.timestamp;
+            if (!ts) return;
+            const time = new Date(ts).getTime();
+            if (!(time >= startMs && time < endMs)) return;
+            records.push(val);
+        });
+    }
+    return records;
 }
