@@ -4,6 +4,7 @@ import { loadLogs } from "../logs.js";
 import { getAppInstance } from "../firebase-db.js";
 import { initReissueFlow } from "./reissue.js";
 import { initReissueNewFlow } from "./reissue-new.js";
+import { buildPrintedSnapshotFromRecord } from "../utils/reprint-snapshot.js";
 import {
     getAuth,
     signOut,
@@ -143,33 +144,12 @@ export function initSourceStep() {
     const reprintBtn = document.getElementById("btnReprint");
     if (reprintBtn)
         reprintBtn.addEventListener("click", () => {
-            // const snap = state.lastPrinted;
             let snap = state.lastPrinted;
             if (!snap) {
                 const logs = loadLogs();
                 const last = logs[logs.length - 1];
                 if (last) {
-                    const source = {
-                        silo: null,
-                        dryer: null,
-                        compound: null,
-                        special: last.special || null,
-                    };
-                    if (last.sourceGroup && last.sourceLetter) {
-                        source[last.sourceGroup] = last.sourceLetter;
-                    }
-                    snap = {
-                        printedAt: last.timestamp,
-                        unitNumber: last.unitNumber,
-                        bigCode: last.product,
-                        weights: {
-                            grossLb: Number(last.grossLb || 0),
-                            netLb: Number(last.netLb || 0),
-                            tareLb: Number(last.tareLb || 0),
-                        },
-                        source,
-                        activeGroup: last.sourceGroup || null,
-                    };
+                    snap = buildPrintedSnapshotFromRecord(last);
                     // Cache for subsequent quick reprints
                     state.lastPrinted = snap;
                     state.reprintAvailable = true;
@@ -185,6 +165,7 @@ export function initSourceStep() {
                 weights: { ...state.weights },
                 source: { ...state.source },
                 activeGroup: state.activeGroup,
+                isCoperion: state.isCoperion,
                 previewTimestamp: state.previewTimestamp,
             };
 
@@ -194,16 +175,18 @@ export function initSourceStep() {
             state.weights = { ...snap.weights };
             state.source = { ...snap.source };
             state.activeGroup = snap.activeGroup || null;
+            state.isCoperion = Boolean(snap.isCoperion);
             state.previewTimestamp = snap.printedAt || snap.timestamp || null;
 
-            // Render the preview with snapshot data and print
-            document.dispatchEvent(new CustomEvent("updatePreview"));
+            // Render the exact snapshot instead of refreshing the next lot number.
+            document.dispatchEvent(new CustomEvent("renderPreviewOnly"));
             const restore = () => {
                 state.unitNumber = saved.unitNumber;
                 state.bigCode = saved.bigCode;
                 state.weights = saved.weights;
                 state.source = saved.source;
                 state.activeGroup = saved.activeGroup;
+                state.isCoperion = saved.isCoperion;
                 state.previewTimestamp = saved.previewTimestamp || null;
                 window.removeEventListener("afterprint", restore);
                 // Reload the app after printing completes
