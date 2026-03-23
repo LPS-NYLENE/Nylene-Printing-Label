@@ -20,6 +20,9 @@ const PREFIX_TO_SOURCE = {
     // Compound
     AC: { group: "compound", letter: "A" },
     BC: { group: "compound", letter: "B" },
+    // Special
+    UX: { group: "other", letter: "UX" },
+    LT: { group: "other", letter: "LT" },
 };
 
 export function parseSourceFromPrefix(prefix) {
@@ -30,7 +33,7 @@ export function parseSourceFromPrefix(prefix) {
 export function buildUnitNumberFromParts({ prefix, year, day, box }) {
     const src = normalizeUnitNumber(prefix).slice(0, 2);
     if (!parseSourceFromPrefix(src)) {
-        return { ok: false, error: "Enter a valid source (e.g. AD, BD, AS, AC)." };
+        return { ok: false, error: "Select a valid source prefix." };
     }
 
     const yDigits = normalizeDigits(year);
