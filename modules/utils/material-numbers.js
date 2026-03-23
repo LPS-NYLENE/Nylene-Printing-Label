@@ -51,7 +51,7 @@ const RAW_MATERIAL_NUMBERS = {
     "BX3WQ662X-01": "10305806",
     "BX3WQ662X-02": "10300936",
     CSDNINT: "10300933",
-    "INT 190": "10305834",
+    "INT-190": "10305834",
     "PA6-205": "10305680",
     "BS700A BPL": "10305474",
     "400-C": "10305436",
@@ -72,7 +72,7 @@ const MATERIAL_NUMBERS_BY_KEY = Object.fromEntries(
     Object.entries(RAW_MATERIAL_NUMBERS).map(([k, v]) => [
         normalizeProductLabel(k),
         String(v),
-    ])
+    ]),
 );
 
 export function resolveMaterialNumber(productLabelOrCode) {

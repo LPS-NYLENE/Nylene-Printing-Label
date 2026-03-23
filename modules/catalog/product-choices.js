@@ -50,7 +50,7 @@ export const PR_PRODUCT_CHOICES = dedupeStable([
     "L-195-2",
     "L-196",
     "700D-INT",
-    "INT 190",
+    "INT-190",
 ]);
 
 export const COPERION_DEFAULT_PRODUCT = "BX3WQ662";
@@ -64,4 +64,3 @@ export const COPERION_PRODUCT_CHOICES = dedupeStable([
     "BX3RF-01",
     "BX3LF",
 ]);
-
