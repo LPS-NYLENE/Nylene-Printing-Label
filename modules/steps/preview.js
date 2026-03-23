@@ -33,7 +33,7 @@ export function initPreviewStep() {
     function updateModifyButtonVisibility() {
         const back = document.getElementById("backToWeights");
         if (!back) return;
-        // For existing-label reissues, preview should not offer "Modify".
+        // For existing-label reissues, preview should not offer "Modify"
         const isExistingReissue = state.reissueFlowType === "existing";
         back.style.display = isExistingReissue ? "none" : "";
     }
@@ -75,7 +75,7 @@ export function initPreviewStep() {
 
         // If clones already exist (e.g., user re-clicked quickly), skip work
         const existing = original.parentElement.querySelectorAll(
-            '.label-canvas[data-print-duplicate="true"]'
+            '.label-canvas[data-print-duplicate="true"]',
         );
         if (existing.length) return () => {};
 
@@ -146,7 +146,7 @@ export function initPreviewStep() {
             } catch (err) {
                 console.error("Failed to start printing", err);
                 alert(
-                    "Printing could not be started. Please check your browser settings and try again."
+                    "Printing could not be started. Please check your browser settings and try again.",
                 );
             } finally {
                 printInFlight = false;
@@ -229,7 +229,7 @@ export function initPreviewStep() {
             } catch (e) {
                 console.warn(
                     "Failed to refresh next unit number from Firebase",
-                    e
+                    e,
                 );
             }
         } catch (err) {
@@ -299,7 +299,8 @@ export function initPreviewStep() {
             const group = state.activeGroup;
             const letter = group ? state.source[group] : undefined;
             if (!state.isCoperion && (!group || !letter)) return;
-            if (!state.isCoperion && !String(state.bigCode || "").trim()) return;
+            if (!state.isCoperion && !String(state.bigCode || "").trim())
+                return;
             await refreshUnitNumberIfNeeded(true);
             renderPreview();
         } catch (e) {
@@ -310,14 +311,20 @@ export function initPreviewStep() {
     function isCompoundBagsContext(activeGroup, productCode) {
         const group = String(activeGroup || "").toLowerCase();
         if (group !== "compound") return false;
-        const code = String(productCode || "").trim().toLowerCase();
+        const code = String(productCode || "")
+            .trim()
+            .toLowerCase();
         return code.endsWith("bags");
     }
 
     async function getNextUnitNumberForPreview(group, letter) {
-        if (state.isCoperion) return await generateCoperionUnitNumberFromFirebase();
+        if (state.isCoperion)
+            return await generateCoperionUnitNumberFromFirebase();
         if (isCompoundBagsContext(group, state.bigCode))
-            return await generateCompoundBagsUnitNumberFromFirebase(group, letter);
+            return await generateCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
         return await generateUnitNumberFromFirebase(group, letter);
     }
 
@@ -338,7 +345,8 @@ export function initPreviewStep() {
             state.__unitNumberContextKey = key;
             return;
         }
-        if (!force && state.__unitNumberContextKey === key && state.unitNumber) return;
+        if (!force && state.__unitNumberContextKey === key && state.unitNumber)
+            return;
         const group = state.activeGroup;
         const letter = group ? state.source[group] : undefined;
         // If we still don't have enough context, do nothing (prevents early stale fetches).
@@ -388,9 +396,9 @@ export function initPreviewStep() {
             : new Date();
         const pad = (n) => String(n).padStart(2, "0");
         const stamp = `${pad(now.getMonth() + 1)}/${pad(
-            now.getDate()
+            now.getDate(),
         )}/${now.getFullYear()} ${pad(now.getHours())}:${pad(
-            now.getMinutes()
+            now.getMinutes(),
         )}:${pad(now.getSeconds())}`;
         const pkgDate = document.getElementById("pkgDate");
         if (pkgDate) pkgDate.textContent = stamp;
