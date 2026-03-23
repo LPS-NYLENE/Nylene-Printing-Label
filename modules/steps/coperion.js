@@ -95,7 +95,7 @@ export function initCoperionStep() {
         b.className = "btn product-btn selected";
         b.textContent = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
         b.addEventListener("click", () => {
-            // no-op: single visible product by default
+            // no-op: single visible product by defaultt
         });
         ctn.appendChild(b);
     }
