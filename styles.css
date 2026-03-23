@@ -322,6 +322,9 @@ body {
     text-align: left;
     width: 1px;
 }
+.product-name {
+    white-space: nowrap;
+}
 .label-left {
     display: flex;
     flex-direction: column;
