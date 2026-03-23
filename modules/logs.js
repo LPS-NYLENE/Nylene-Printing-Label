@@ -1,5 +1,6 @@
 import { state } from "./state.js";
 import { lbToKg } from "./utils/format.js";
+import { withExcelSource, resolveExcelSource } from "./utils/export-source.js";
 import { resolveMaterialNumber } from "./utils/material-numbers.js";
 import {
     savePrintToFirebase,
@@ -30,7 +31,7 @@ export function buildLogRecord() {
     const group = state.activeGroup || "";
     const letter = group ? state.source[group] || "" : "";
     const product = state.bigCode;
-    return {
+    const record = {
         timestamp: toIso(now),
         unitNumber: state.unitNumber,
         product,
@@ -50,6 +51,7 @@ export function buildLogRecord() {
             state.reissueFlag === "RI" ? state.reissueOriginalUnit || "" : "",
         reissueFlag: state.reissueFlag === "RI" ? "RI" : "",
     };
+    return withExcelSource(record);
 }
 
 export async function appendLogRecord() {
@@ -92,7 +94,7 @@ async function appendToExcelFile(fileHandle, logs) {
         const existing = XLSX.utils.sheet_to_json(ws);
         const merged = mergeByTimestamp(existing, logs);
         const ordered = orderRecordsForExcel(merged);
-        const newWs = XLSX.utils.json_to_sheet(ordered);
+        const newWs = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
         wb.Sheets[wsName] = newWs;
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -101,7 +103,7 @@ async function appendToExcelFile(fileHandle, logs) {
     } catch (e) {
         const wb = XLSX.utils.book_new();
         const ordered = orderRecordsForExcel(logs);
-        const ws = XLSX.utils.json_to_sheet(ordered);
+        const ws = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
         XLSX.utils.book_append_sheet(wb, ws, "Logs");
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -123,6 +125,10 @@ function mergeByTimestamp(existingRows, newRows) {
         }
     }
     return merged;
+}
+
+function buildLogsSheetRows(records) {
+    return records.map(withExcelSource);
 }
 
 function normalizeUnitNumber(value) {
@@ -280,7 +286,7 @@ export function bindExcelButton() {
                 );
                 const ordered = orderRecordsForExcel(loadLogs());
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(ordered);
+                const ws = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
                 XLSX.utils.book_append_sheet(wb, ws, "Logs");
                 XLSX.writeFile(
                     wb,
@@ -311,9 +317,6 @@ async function getCloudExportUrl() {
 }
 
 // Convert an app log record into the MAS Excel row format.
-// Target columns per provided image:
-// [Date, Time, 0, Product, Batch/Unit, Certificate, Net LBS, Net KGS,
-//  Tare LBS, Quantity(=1), Material Number, Source Code, 2003, LB]
 function formatForMasExcel(rec) {
     const dt = new Date(rec.timestamp || Date.now());
     const pad = (n) => String(n).padStart(2, "0");
@@ -333,6 +336,7 @@ function formatForMasExcel(rec) {
         (rec && rec.materialNumber ? String(rec.materialNumber) : "") ||
         resolveMaterialNumber(product);
     const prefix = resolvePrefixFromUnit(unit);
+    const source = resolveExcelSource(rec);
     const code2003 = 2003;
     const unitType = "LB";
     const reissueFlag = String(rec && rec.reissueFlag ? rec.reissueFlag : "");
@@ -348,6 +352,7 @@ function formatForMasExcel(rec) {
         qty,
         materialNumber,
         prefix,
+        source,
         code2003,
         unitType,
         reissueFlag === "RI" ? "RI" : "",
@@ -367,6 +372,7 @@ function buildMasHeaderAndRows(rows) {
         "QTY",
         "MATERIAL",
         "PREFIX",
+        "SOURCE",
         "2003",
         "UOM",
         "RI",
