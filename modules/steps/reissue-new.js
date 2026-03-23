@@ -10,9 +10,10 @@ import {
     promptForLotNumber,
     promptForPassword,
 } from "../utils/operator-prompts.js";
+import { OPERATOR_PASSWORD } from "../utils/passwords.js";
 
 const REISSUE_FLAG = "RI";
-const PASSWORD_EXPECTED = "NYLENE";
+const PASSWORD_EXPECTED = OPERATOR_PASSWORD;
 
 function setFromRecord(record) {
     const unit = normalizeUnitNumber(record && record.unitNumber);

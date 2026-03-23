@@ -10,6 +10,7 @@ import {
     promptForLotNumber,
     promptForPassword,
 } from "../utils/operator-prompts.js";
+import { OPERATOR_PASSWORD } from "../utils/passwords.js";
 import {
     normalizeUnitNumber,
     parseSourceFromPrefix,
@@ -167,7 +168,7 @@ export function initPreviewStep() {
     async function handleReissueModify() {
         const authed = await promptForPassword({
             title: "Enter password",
-            expected: "NYLENE",
+            expected: OPERATOR_PASSWORD,
         });
         if (!authed) return;
 

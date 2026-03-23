@@ -1,5 +1,6 @@
 import { state, showScreen } from "../state.js";
 import { getAppInstance } from "../firebase-db.js";
+import { normalizeLoginPassword } from "../utils/passwords.js";
 import {
     getAuth,
     signInWithEmailAndPassword,
@@ -59,7 +60,7 @@ export function initAuthStep() {
         const app = getAppInstance();
         const auth = getAuth(app);
         const userEmail = String(email.value || "").trim();
-        const password = String(pwd.value || "");
+        const password = normalizeLoginPassword(pwd.value);
         try {
             setError("");
             // Persist last flow selection for post-login routing

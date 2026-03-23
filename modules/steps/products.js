@@ -15,6 +15,10 @@ import {
     PR_DEFAULT_PRODUCT,
     PR_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
+import {
+    matchesPasswordCaseInsensitive,
+    OPERATOR_PASSWORD,
+} from "../utils/passwords.js";
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
     if (back) back.addEventListener("click", () => showScreen("source"));
@@ -336,7 +340,7 @@ export function initProductsStep() {
     if (unlockBtn)
         unlockBtn.addEventListener("click", () => {
             const val = (pwdInput && String(pwdInput.value || "").trim()) || "";
-            if (val.toUpperCase() === "NYLENE") {
+            if (matchesPasswordCaseInsensitive(val, OPERATOR_PASSWORD)) {
                 showChoices();
             } else {
                 if (errorEl) errorEl.textContent = "Incorrect password";

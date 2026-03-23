@@ -14,6 +14,10 @@ import {
     COPERION_DEFAULT_PRODUCT,
     COPERION_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
+import {
+    matchesPasswordCaseInsensitive,
+    OPERATOR_PASSWORD,
+} from "../utils/passwords.js";
 
 const CoperionProductStorageKey = "coperion_selected_product_v1";
 
@@ -155,7 +159,7 @@ export function initCoperionStep() {
     if (unlockBtn)
         unlockBtn.addEventListener("click", () => {
             const val = (pwdInput && String(pwdInput.value || "").trim()) || "";
-            if (val.toUpperCase() === "NYLENE") {
+            if (matchesPasswordCaseInsensitive(val, OPERATOR_PASSWORD)) {
                 showChoices();
             } else {
                 if (errorEl) errorEl.textContent = "Incorrect password";

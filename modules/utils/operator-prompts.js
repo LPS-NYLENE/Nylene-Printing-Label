@@ -1,3 +1,8 @@
+import {
+    matchesPasswordCaseInsensitive,
+    OPERATOR_PASSWORD,
+} from "./passwords.js";
+
 function byId(id) {
     return document.getElementById(id);
 }
@@ -65,7 +70,7 @@ export async function confirmYesNo({
 
 export async function promptForPassword({
     title = "Enter password",
-    expected = "NYLENE",
+    expected = OPERATOR_PASSWORD,
 } = {}) {
     const modal = byId("operatorPasswordModal");
     const titleEl = byId("operatorPasswordTitle");
@@ -77,7 +82,7 @@ export async function promptForPassword({
     if (!modal || !input || !cancelBtn || !confirmBtn) {
         const val = window.prompt(title, "");
         if (val == null) return false;
-        return String(val).trim().toUpperCase() === String(expected).trim().toUpperCase();
+        return matchesPasswordCaseInsensitive(val, expected);
     }
 
     if (titleEl) titleEl.textContent = title;
@@ -109,7 +114,7 @@ export async function promptForPassword({
 
         const submit = () => {
             const val = String(input.value || "").trim();
-            if (val.toUpperCase() !== String(expected).trim().toUpperCase()) {
+            if (!matchesPasswordCaseInsensitive(val, expected)) {
                 if (errorEl) errorEl.textContent = "Incorrect password";
                 input.focus();
                 return;
