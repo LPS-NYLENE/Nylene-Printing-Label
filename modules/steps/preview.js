@@ -167,7 +167,7 @@ export function initPreviewStep() {
     async function handleReissueModify() {
         const authed = await promptForPassword({
             title: "Enter password",
-            expected: "NYLENE",
+            expected: "Nylene2026!",
         });
         if (!authed) return;
 
