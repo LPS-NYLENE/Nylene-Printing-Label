@@ -47,7 +47,7 @@ export function initCoperionStep() {
 
     // Legacy local key kept for backward compatibility (read once if contextual empty)
 
-    // Ensure base selection and numbering context when entering Coperionn
+    // Ensure base selection and numbering context when entering Coperion
     function prepareCoperionContext() {
         state.activeGroup = "compound";
         state.source.compound = "A"; // default mapping for Coperion
