@@ -47,7 +47,7 @@ export function initCoperionStep() {
 
     // Legacy local key kept for backward compatibility (read once if contextual empty)
 
-    // Ensure base selection and numbering context when entering Coperion
+    // Ensure base selection and numbering context when entering Coperionn
     function prepareCoperionContext() {
         state.activeGroup = "compound";
         state.source.compound = "A"; // default mapping for Coperion
@@ -55,13 +55,13 @@ export function initCoperionStep() {
         const group = state.activeGroup;
         const letter = state.source.compound;
         const contextual = normalizeCoperionProduct(
-            loadProductForContext(group, letter)
+            loadProductForContext(group, letter),
         );
         // If nothing in contextual store, fall back to older single-key stores once.
         const legacy = (function legacyRead() {
             try {
                 return normalizeCoperionProduct(
-                    localStorage.getItem(CoperionProductStorageKey)
+                    localStorage.getItem(CoperionProductStorageKey),
                 );
             } catch {
                 return null;
