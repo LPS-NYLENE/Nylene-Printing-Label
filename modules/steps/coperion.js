@@ -10,17 +10,17 @@ import {
     signOut,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
+import {
+    COPERION_DEFAULT_PRODUCT,
+    COPERION_PRODUCT_CHOICES,
+} from "../catalog/product-choices.js";
 
-const DEFAULT_PRODUCT = "BX3WQ662";
 const CoperionProductStorageKey = "coperion_selected_product_v1";
-const OTHER_PRODUCTS = [
-    "BX3WQ662X",
-    "BX3WQ662X-01",
-    "BX3WQ662-02",
-    "BX3RF",
-    "BX3RF-01",
-    "BX3LF",
-];
+
+function normalizeCoperionProduct(product) {
+    const normalized = String(product || "").trim();
+    return COPERION_PRODUCT_CHOICES.includes(normalized) ? normalized : null;
+}
 
 export function initCoperionStep() {
     const back = document.getElementById("backToSourceFromCoperion");
@@ -54,21 +54,23 @@ export function initCoperionStep() {
         state.isCoperion = true;
         const group = state.activeGroup;
         const letter = state.source.compound;
-        const contextual = loadProductForContext(group, letter);
-        if (!state.selectedProduct) {
-            // If nothing in contextual store, fall back to older single-key stores once
-            const legacy = (function legacyRead() {
-                try {
-                    const raw = localStorage.getItem(CoperionProductStorageKey);
-                    return raw || null;
-                } catch {
-                    return null;
-                }
-            })();
-            state.selectedProduct = contextual || legacy || DEFAULT_PRODUCT;
-        } else if (contextual && state.selectedProduct !== contextual) {
-            state.selectedProduct = contextual;
-        }
+        const contextual = normalizeCoperionProduct(
+            loadProductForContext(group, letter)
+        );
+        // If nothing in contextual store, fall back to older single-key stores once.
+        const legacy = (function legacyRead() {
+            try {
+                return normalizeCoperionProduct(
+                    localStorage.getItem(CoperionProductStorageKey)
+                );
+            } catch {
+                return null;
+            }
+        })();
+        const current = normalizeCoperionProduct(state.selectedProduct);
+        state.selectedProduct =
+            contextual || current || legacy || COPERION_DEFAULT_PRODUCT;
+        saveProductForContext(group, letter, state.selectedProduct);
         // Always reflect the chosen product in the big code
         state.bigCode = state.selectedProduct;
         // Refresh the unit number from Firebase using Coperion-specific numbering
@@ -91,7 +93,7 @@ export function initCoperionStep() {
         ctn.innerHTML = "";
         const b = document.createElement("button");
         b.className = "btn product-btn selected";
-        b.textContent = state.selectedProduct || DEFAULT_PRODUCT;
+        b.textContent = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
         b.addEventListener("click", () => {
             // no-op: single visible product by default
         });
@@ -120,8 +122,7 @@ export function initCoperionStep() {
         if (stageChoices) stageChoices.classList.remove("hidden");
         if (!choicesEl) return;
         choicesEl.innerHTML = "";
-        const all = [DEFAULT_PRODUCT, ...OTHER_PRODUCTS];
-        all.forEach((prod) => {
+        COPERION_PRODUCT_CHOICES.forEach((prod) => {
             const btn = document.createElement("button");
             btn.className =
                 "btn product-btn" +
@@ -170,7 +171,7 @@ export function initCoperionStep() {
     if (proceed)
         proceed.addEventListener("click", () => {
             // Bind product to state and move to weight
-            state.bigCode = state.selectedProduct || DEFAULT_PRODUCT;
+            state.bigCode = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
             const gross = document.getElementById("grossWeight");
