@@ -21,46 +21,88 @@ function orderRecordsForExcel(records) {
   decorated.sort((a, b) => {
     const at = String((a.rec && a.rec.timestamp) || '');
     const bt = String((b.rec && b.rec.timestamp) || '');
-    const cmp = at.localeCompare(bt);
+    const cmp = bt.localeCompare(at);
     if (cmp !== 0) return cmp;
     return a.index - b.index;
   });
+  return decorated.map(({ rec }) => rec);
+}
 
-  const baseRecords = [];
-  const reissuesByOriginal = new Map();
-  const reissuesInOrder = [];
-  for (const { rec } of decorated) {
-    const isReissue = isReissueRecord(rec);
-    const originalKey = normalizeUnitNumber(rec && rec.reissueOriginalUnit);
-    if (isReissue && originalKey) {
-      if (!reissuesByOriginal.has(originalKey)) reissuesByOriginal.set(originalKey, []);
-      reissuesByOriginal.get(originalKey).push(rec);
-      reissuesInOrder.push(rec);
-    } else {
-      baseRecords.push(rec);
-    }
-  }
+function formatMasTime(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const hours = Number.isNaN(date.getTime()) ? 0 : date.getHours();
+  const minutes = Number.isNaN(date.getTime()) ? 0 : date.getMinutes();
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const normalizedHours = hours % 12 || 12;
+  return `${normalizedHours}:${pad(minutes)} ${suffix}`;
+}
 
-  const output = [];
-  const attached = new Set();
-  const usedOriginals = new Set();
-  for (const rec of baseRecords) {
-    output.push(rec);
-    const unitKey = normalizeUnitNumber(rec && rec.unitNumber);
-    if (!unitKey || usedOriginals.has(unitKey)) continue;
-    const reissues = reissuesByOriginal.get(unitKey);
-    if (reissues && reissues.length) {
-      reissues.forEach((r) => attached.add(r));
-      output.push(...reissues);
-    }
-    usedOriginals.add(unitKey);
-  }
+function formatMasWeight(value) {
+  const weight = Number(value || 0);
+  return weight.toFixed(1);
+}
 
-  for (const rec of reissuesInOrder) {
-    if (!attached.has(rec)) output.push(rec);
-  }
+function resolvePrefixFromUnit(unit) {
+  if (!unit || typeof unit !== 'string') return '';
+  return unit.slice(0, 2).toUpperCase();
+}
 
-  return output;
+function formatForMasExcel(rec) {
+  const dt = new Date((rec && rec.timestamp) || Date.now());
+  const pad = (n) => String(n).padStart(2, '0');
+  const dateStr = `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}/${dt
+    .getFullYear()
+    .toString()
+    .slice(-2)}`;
+  const timeStr = formatMasTime(dt);
+  const zero = 0;
+  const reissueMarker = isReissueRecord(rec) ? 'RI' : '';
+  const product = (rec && rec.product) || '';
+  const unit = (rec && rec.unitNumber) || '';
+  const grossLb = formatMasWeight(rec && rec.grossLb);
+  const netLb = formatMasWeight(rec && rec.netLb);
+  const tareLb = formatMasWeight(rec && rec.tareLb);
+  const qty = 1;
+  const materialNumber = rec && rec.materialNumber ? String(rec.materialNumber) : '';
+  const prefix = resolvePrefixFromUnit(unit);
+  const code2003 = 2003;
+  const unitType = 'LB';
+  return [
+    dateStr,
+    timeStr,
+    zero,
+    reissueMarker,
+    product,
+    unit,
+    grossLb,
+    netLb,
+    tareLb,
+    qty,
+    materialNumber,
+    prefix,
+    code2003,
+    unitType,
+  ];
+}
+
+function buildMasHeaderAndRows(rows) {
+  const header = [
+    'DATE',
+    'TIME',
+    '0',
+    '',
+    'PRODUCT',
+    'UNIT',
+    'GROSS LB',
+    'NET LB',
+    'TARE LB',
+    'QTY',
+    'MATERIAL',
+    'PREFIX',
+    '2003',
+    'UOM',
+  ];
+  return [header, ...rows];
 }
 
 exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, async (req, res) => {
@@ -98,45 +140,11 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
     }
 
     const ordered = orderRecordsForExcel(records);
-    const rows = ordered.map((rec) => ({
-      id: rec.id,
-      day: rec.day,
-      timestamp: rec.timestamp,
-      unitNumber: rec.unitNumber,
-      product: rec.product,
-      materialNumber: rec.materialNumber,
-      sourceGroup: rec.sourceGroup,
-      sourceLetter: rec.sourceLetter,
-      special: rec.special,
-      grossLb: rec.grossLb,
-      grossKg: rec.grossKg,
-      netLb: rec.netLb,
-      netKg: rec.netKg,
-      tareLb: rec.tareLb,
-      tareKg: rec.tareKg,
-    }));
+    const rows = ordered.map((rec) => formatForMasExcel(rec));
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: [
-        'id',
-        'day',
-        'timestamp',
-        'unitNumber',
-        'product',
-        'materialNumber',
-        'sourceGroup',
-        'sourceLetter',
-        'special',
-        'grossLb',
-        'grossKg',
-        'netLb',
-        'netKg',
-        'tareLb',
-        'tareKg',
-      ],
-    });
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Labels');
+    const worksheet = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'MASOutput');
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
