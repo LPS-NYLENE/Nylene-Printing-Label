@@ -69,8 +69,21 @@ export async function appendLogRecord() {
     } catch (e) {
         console.warn("Failed to write to Firebase", e);
     }
-    if (state.excelHandle && (await verifyHandleWriteable(state.excelHandle))) {
-        await appendToExcelFile(state.excelHandle, logs);
+    await appendToConfiguredExcelFile(logs);
+}
+
+async function appendToConfiguredExcelFile(logs) {
+    const handle = state.excelHandle;
+    if (!handle) return;
+    if (!(await verifyHandleWriteable(handle))) return;
+    try {
+        await appendToExcelFile(handle, logs);
+    } catch (e) {
+        // Printing/logging already succeeded locally; treat the optional
+        // file-handle export as best-effort so a stale browser file handle
+        // does not surface as a print failure.
+        console.warn("Failed to append log to selected Excel file", e);
+        state.excelHandle = null;
     }
 }
 
