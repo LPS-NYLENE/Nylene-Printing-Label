@@ -15,42 +15,6 @@ function isReissueRecord(record) {
   return String(record && record.reissueFlag ? record.reissueFlag : '').toUpperCase() === 'RI';
 }
 
-const PR_SOURCE_PREFIXES = new Set([
-  'AC',
-  'AD',
-  'BD',
-  'CD',
-  'DE',
-  'AS',
-  'BS',
-  'CS',
-  'DS',
-  'BC',
-  'UX',
-  'LT',
-]);
-
-function normalizePrefix(value) {
-  return String(value || '').trim().toUpperCase().slice(0, 2);
-}
-
-function resolveExcelSource(record) {
-  const unitPrefix = normalizePrefix(record && record.unitNumber);
-  if (unitPrefix === 'EA') return 'Coperion';
-
-  const productPrefix = normalizePrefix(record && record.product);
-  if (PR_SOURCE_PREFIXES.has(unitPrefix) || PR_SOURCE_PREFIXES.has(productPrefix)) {
-    return 'P&R';
-  }
-
-  const productLine = String(record && record.productLine ? record.productLine : '').trim();
-  if (productLine === 'Coperion' || productLine === 'P&R') {
-    return productLine;
-  }
-
-  return '';
-}
-
 function orderRecordsForExcel(records) {
   if (!Array.isArray(records)) return [];
   const decorated = records.map((rec, index) => ({ rec, index }));
@@ -117,7 +81,6 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
             unitNumber: d.unitNumber || '',
             product: d.product || '',
             materialNumber: d.materialNumber || '',
-            productLine: d.productLine || '',
             sourceGroup: d.sourceGroup || '',
             sourceLetter: d.sourceLetter || '',
             special: d.special || '',
@@ -142,7 +105,6 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
       unitNumber: rec.unitNumber,
       product: rec.product,
       materialNumber: rec.materialNumber,
-      source: resolveExcelSource(rec),
       sourceGroup: rec.sourceGroup,
       sourceLetter: rec.sourceLetter,
       special: rec.special,
@@ -163,7 +125,6 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
         'unitNumber',
         'product',
         'materialNumber',
-        'source',
         'sourceGroup',
         'sourceLetter',
         'special',
