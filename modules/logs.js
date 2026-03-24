@@ -131,10 +131,6 @@ function buildLogsSheetRows(records) {
     return records.map(withExcelSource);
 }
 
-function normalizeUnitNumber(value) {
-    return String(value || "").trim().toUpperCase();
-}
-
 function isReissueRecord(record) {
     return String(record?.reissueFlag || "").toUpperCase() === "RI";
 }
@@ -145,47 +141,11 @@ function orderRecordsForExcel(records) {
     decorated.sort((a, b) => {
         const at = String(a.rec?.timestamp || "");
         const bt = String(b.rec?.timestamp || "");
-        const cmp = at.localeCompare(bt);
+        const cmp = bt.localeCompare(at);
         if (cmp !== 0) return cmp;
         return a.index - b.index;
     });
-
-    const baseRecords = [];
-    const reissuesByOriginal = new Map();
-    const reissuesInOrder = [];
-    for (const { rec } of decorated) {
-        const isReissue = isReissueRecord(rec);
-        const originalKey = normalizeUnitNumber(rec?.reissueOriginalUnit);
-        if (isReissue && originalKey) {
-            if (!reissuesByOriginal.has(originalKey))
-                reissuesByOriginal.set(originalKey, []);
-            reissuesByOriginal.get(originalKey).push(rec);
-            reissuesInOrder.push(rec);
-        } else {
-            baseRecords.push(rec);
-        }
-    }
-
-    const output = [];
-    const attached = new Set();
-    const usedOriginals = new Set();
-    for (const rec of baseRecords) {
-        output.push(rec);
-        const unitKey = normalizeUnitNumber(rec?.unitNumber);
-        if (!unitKey || usedOriginals.has(unitKey)) continue;
-        const reissues = reissuesByOriginal.get(unitKey);
-        if (reissues && reissues.length) {
-            reissues.forEach((r) => attached.add(r));
-            output.push(...reissues);
-        }
-        usedOriginals.add(unitKey);
-    }
-
-    for (const rec of reissuesInOrder) {
-        if (!attached.has(rec)) output.push(rec);
-    }
-
-    return output;
+    return decorated.map(({ rec }) => rec);
 }
 
 export function bindExcelButton() {
@@ -285,12 +245,13 @@ export function bindExcelButton() {
                     e
                 );
                 const ordered = orderRecordsForExcel(loadLogs());
+                const rows = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
-                XLSX.utils.book_append_sheet(wb, ws, "Logs");
+                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+                XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
                 XLSX.writeFile(
                     wb,
-                    `label-logs-${new Date().toISOString().slice(0, 10)}.xlsx`
+                    `MASOutput-${new Date().toISOString().slice(0, 10)}.xlsx`
                 );
             } finally {
                 cloudBtn.disabled = false;
@@ -324,8 +285,9 @@ function formatForMasExcel(rec) {
         .getFullYear()
         .toString()
         .slice(-2)}`;
-    const timeStr = `${dt.getHours()}:${pad(dt.getMinutes())}`;
+    const timeStr = formatMasTime(dt);
     const zero = 0;
+    const reissueMarker = isReissueRecord(rec) ? "RI" : "";
     const product = rec.product || "";
     const unit = rec.unitNumber || "";
     const grossLb = formatMasWeight(rec.grossLb);
@@ -342,6 +304,7 @@ function formatForMasExcel(rec) {
         dateStr,
         timeStr,
         zero,
+        reissueMarker,
         product,
         unit,
         grossLb,
@@ -360,6 +323,7 @@ function buildMasHeaderAndRows(rows) {
         "DATE",
         "TIME",
         "0",
+        "",
         "PRODUCT",
         "UNIT",
         "GROSS LB",
@@ -387,4 +351,13 @@ function resolvePrefixFromUnit(unit) {
 function formatMasWeight(value) {
     const weight = Number(value || 0);
     return weight.toFixed(1);
+}
+
+function formatMasTime(date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    const hours = Number.isNaN(date.getTime()) ? 0 : date.getHours();
+    const minutes = Number.isNaN(date.getTime()) ? 0 : date.getMinutes();
+    const suffix = hours >= 12 ? "PM" : "AM";
+    const normalizedHours = hours % 12 || 12;
+    return `${normalizedHours}:${pad(minutes)} ${suffix}`;
 }
