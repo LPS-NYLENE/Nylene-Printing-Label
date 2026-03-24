@@ -16,14 +16,20 @@ const PASSWORD_EXPECTED = "Nylene2026!";
 
 function setFromRecord(record) {
     const unit = normalizeUnitNumber(record && record.unitNumber);
-    const product = String(record && record.product ? record.product : "").trim();
-    const sourceGroup = String(record && record.sourceGroup ? record.sourceGroup : "").toLowerCase();
-    const sourceLetter = String(record && record.sourceLetter ? record.sourceLetter : "").toUpperCase();
+    const product = String(
+        record && record.product ? record.product : "",
+    ).trim();
+    const sourceGroup = String(
+        record && record.sourceGroup ? record.sourceGroup : "",
+    ).toLowerCase();
+    const sourceLetter = String(
+        record && record.sourceLetter ? record.sourceLetter : "",
+    ).toUpperCase();
     const special = record && record.special ? String(record.special) : null;
 
     state.isCoperion =
-        String(record && record.productLine ? record.productLine : "") === "Coperion" ||
-        unit.startsWith("EA1");
+        String(record && record.productLine ? record.productLine : "") ===
+            "Coperion" || unit.startsWith("EA1");
 
     state.activeGroup = sourceGroup || null;
     if (sourceGroup && sourceLetter) state.source[sourceGroup] = sourceLetter;
@@ -128,7 +134,7 @@ export function initReissueNewFlow() {
         setError("");
         const record = await findLatestPrintRecordByUnit(unit);
         if (record) {
-            // Existing label: no password required, reissue directly.
+            // Existing label: no password required, reissue directly
             setFromRecord(record);
             state.reissueFlag = REISSUE_FLAG;
             state.reissueOriginalUnit = normalizeUnitNumber(record.unitNumber);
@@ -186,7 +192,11 @@ export function initReissueNewFlow() {
             closeModal();
             resetReissueNewState();
         });
-    if (manualBtn) manualBtn.addEventListener("click", () => void handleManualEntry());
-    if (searchBtn) searchBtn.addEventListener("click", () => void handleSearchFromFields());
+    if (manualBtn)
+        manualBtn.addEventListener("click", () => void handleManualEntry());
+    if (searchBtn)
+        searchBtn.addEventListener(
+            "click",
+            () => void handleSearchFromFields(),
+        );
 }
-
