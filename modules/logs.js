@@ -1,6 +1,6 @@
 import { state } from "./state.js";
 import { lbToKg } from "./utils/format.js";
-import { withExcelSource, resolveExcelSource } from "./utils/export-source.js";
+import { withExcelSource } from "./utils/export-source.js";
 import { resolveMaterialNumber } from "./utils/material-numbers.js";
 import {
     savePrintToFirebase,
@@ -324,22 +324,20 @@ function formatForMasExcel(rec) {
         .getFullYear()
         .toString()
         .slice(-2)}`;
-    const timeStr = `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    const timeStr = `${dt.getHours()}:${pad(dt.getMinutes())}`;
     const zero = 0;
     const product = rec.product || "";
     const unit = rec.unitNumber || "";
-    const grossLb = Number(rec.grossLb || 0);
-    const netLb = Number(rec.netLb || 0);
-    const tareLb = Number(rec.tareLb || 0);
+    const grossLb = formatMasWeight(rec.grossLb);
+    const netLb = formatMasWeight(rec.netLb);
+    const tareLb = formatMasWeight(rec.tareLb);
     const qty = 1;
     const materialNumber =
         (rec && rec.materialNumber ? String(rec.materialNumber) : "") ||
         resolveMaterialNumber(product);
     const prefix = resolvePrefixFromUnit(unit);
-    const source = resolveExcelSource(rec);
     const code2003 = 2003;
     const unitType = "LB";
-    const reissueFlag = String(rec && rec.reissueFlag ? rec.reissueFlag : "");
     return [
         dateStr,
         timeStr,
@@ -352,10 +350,8 @@ function formatForMasExcel(rec) {
         qty,
         materialNumber,
         prefix,
-        source,
         code2003,
         unitType,
-        reissueFlag === "RI" ? "RI" : "",
     ];
 }
 
@@ -372,10 +368,8 @@ function buildMasHeaderAndRows(rows) {
         "QTY",
         "MATERIAL",
         "PREFIX",
-        "SOURCE",
         "2003",
         "UOM",
-        "RI",
     ];
     return [header, ...rows];
 }
@@ -388,4 +382,9 @@ function resolveCertificateForProduct(product) {
 function resolvePrefixFromUnit(unit) {
     if (!unit || typeof unit !== "string") return "";
     return unit.slice(0, 2).toUpperCase();
+}
+
+function formatMasWeight(value) {
+    const weight = Number(value || 0);
+    return weight.toFixed(1);
 }
