@@ -5,71 +5,6 @@ const { onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
 
-const MAS_HEADER = [
-  'DATE',
-  'TIME',
-  '0',
-  '',
-  'PRODUCT',
-  'UNIT',
-  'GROSS LB',
-  'NET LB',
-  'TARE LB',
-  'QTY',
-  'MATERIAL',
-  'PREFIX',
-  '2003',
-  'UOM',
-];
-
-function formatMasDate(value) {
-  const dt = new Date(value || Date.now());
-  const safeDate = Number.isNaN(dt.getTime()) ? new Date() : dt;
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(safeDate.getMonth() + 1)}/${pad(safeDate.getDate())}/${safeDate
-      .getFullYear()
-      .toString()
-      .slice(-2)}`;
-}
-
-function formatMasTime(value) {
-  const dt = new Date(value || Date.now());
-  const safeDate = Number.isNaN(dt.getTime()) ? new Date() : dt;
-  const hours = safeDate.getHours();
-  const hour12 = hours % 12 || 12;
-  const suffix = hours >= 12 ? 'PM' : 'AM';
-  return `${hour12}:${String(safeDate.getMinutes()).padStart(2, '0')} ${suffix}`;
-}
-
-function formatMasWeight(value) {
-  const weight = Number(value || 0);
-  return weight.toFixed(1);
-}
-
-function resolvePrefixFromUnit(unit) {
-  if (!unit || typeof unit !== 'string') return '';
-  return unit.slice(0, 2).toUpperCase();
-}
-
-function formatMasRow(rec) {
-  return [
-    formatMasDate(rec && rec.timestamp),
-    formatMasTime(rec && rec.timestamp),
-    0,
-    '',
-    rec && rec.product ? rec.product : '',
-    rec && rec.unitNumber ? rec.unitNumber : '',
-    formatMasWeight(rec && rec.grossLb),
-    formatMasWeight(rec && rec.netLb),
-    formatMasWeight(rec && rec.tareLb),
-    1,
-    rec && rec.materialNumber ? String(rec.materialNumber) : '',
-    resolvePrefixFromUnit(rec && rec.unitNumber),
-    2003,
-    'LB',
-  ];
-}
-
 admin.initializeApp();
 
 function normalizeUnitNumber(value) {
@@ -86,7 +21,7 @@ function orderRecordsForExcel(records) {
   decorated.sort((a, b) => {
     const at = String((a.rec && a.rec.timestamp) || '');
     const bt = String((b.rec && b.rec.timestamp) || '');
-    const cmp = bt.localeCompare(at);
+    const cmp = at.localeCompare(bt);
     if (cmp !== 0) return cmp;
     return a.index - b.index;
   });
@@ -163,11 +98,45 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
     }
 
     const ordered = orderRecordsForExcel(records);
-    const rows = ordered.map(formatMasRow);
+    const rows = ordered.map((rec) => ({
+      id: rec.id,
+      day: rec.day,
+      timestamp: rec.timestamp,
+      unitNumber: rec.unitNumber,
+      product: rec.product,
+      materialNumber: rec.materialNumber,
+      sourceGroup: rec.sourceGroup,
+      sourceLetter: rec.sourceLetter,
+      special: rec.special,
+      grossLb: rec.grossLb,
+      grossKg: rec.grossKg,
+      netLb: rec.netLb,
+      netKg: rec.netKg,
+      tareLb: rec.tareLb,
+      tareKg: rec.tareKg,
+    }));
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet([MAS_HEADER, ...rows]);
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'MASOutput');
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: [
+        'id',
+        'day',
+        'timestamp',
+        'unitNumber',
+        'product',
+        'materialNumber',
+        'sourceGroup',
+        'sourceLetter',
+        'special',
+        'grossLb',
+        'grossKg',
+        'netLb',
+        'netKg',
+        'tareLb',
+        'tareKg',
+      ],
+    });
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Labels');
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
