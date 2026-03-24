@@ -1,11 +1,7 @@
 import { state } from "./state.js";
 import { lbToKg } from "./utils/format.js";
 import { withExcelSource } from "./utils/export-source.js";
-import {
-    buildMasHeaderAndRows,
-    formatForMasExcel,
-    orderMasRecordsForExcel,
-} from "./utils/mas-export.js";
+import { resolveMaterialNumber } from "./utils/material-numbers.js";
 import {
     savePrintToFirebase,
     fetchAllPrintsFromFirebase,
@@ -217,7 +213,7 @@ export function bindExcelButton() {
 
             // Always fetch from Firebase and download an Excel immediately
             const firebaseLogs = await fetchAllPrintsFromFirebase();
-            const ordered = orderMasRecordsForExcel(firebaseLogs);
+            const ordered = orderRecordsForExcel(firebaseLogs);
             const rows = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
@@ -231,7 +227,7 @@ export function bindExcelButton() {
                 "Firebase export failed, falling back to local logs",
                 e
             );
-            const ordered = orderMasRecordsForExcel(loadLogs());
+            const ordered = orderRecordsForExcel(loadLogs());
             const logs = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
@@ -248,7 +244,7 @@ export function bindExcelButton() {
         exportBtn.addEventListener("click", async () => {
             try {
                 const firebaseLogs = await fetchAllPrintsFromFirebase();
-                const ordered = orderMasRecordsForExcel(firebaseLogs);
+                const ordered = orderRecordsForExcel(firebaseLogs);
                 const rows = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
@@ -262,7 +258,7 @@ export function bindExcelButton() {
                     "Firebase export failed, falling back to local logs",
                     e
                 );
-                const ordered = orderMasRecordsForExcel(loadLogs());
+                const ordered = orderRecordsForExcel(loadLogs());
                 const logs = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
@@ -320,7 +316,75 @@ async function getCloudExportUrl() {
     return data.downloadUrl;
 }
 
+// Convert an app log record into the MAS Excel row format.
+function formatForMasExcel(rec) {
+    const dt = new Date(rec.timestamp || Date.now());
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateStr = `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}/${dt
+        .getFullYear()
+        .toString()
+        .slice(-2)}`;
+    const timeStr = `${dt.getHours()}:${pad(dt.getMinutes())}`;
+    const zero = 0;
+    const product = rec.product || "";
+    const unit = rec.unitNumber || "";
+    const grossLb = formatMasWeight(rec.grossLb);
+    const netLb = formatMasWeight(rec.netLb);
+    const tareLb = formatMasWeight(rec.tareLb);
+    const qty = 1;
+    const materialNumber =
+        (rec && rec.materialNumber ? String(rec.materialNumber) : "") ||
+        resolveMaterialNumber(product);
+    const prefix = resolvePrefixFromUnit(unit);
+    const code2003 = 2003;
+    const unitType = "LB";
+    return [
+        dateStr,
+        timeStr,
+        zero,
+        product,
+        unit,
+        grossLb,
+        netLb,
+        tareLb,
+        qty,
+        materialNumber,
+        prefix,
+        code2003,
+        unitType,
+    ];
+}
+
+function buildMasHeaderAndRows(rows) {
+    const header = [
+        "DATE",
+        "TIME",
+        "0",
+        "PRODUCT",
+        "UNIT",
+        "GROSS LB",
+        "NET LB",
+        "TARE LB",
+        "QTY",
+        "MATERIAL",
+        "PREFIX",
+        "2003",
+        "UOM",
+    ];
+    return [header, ...rows];
+}
+
 function resolveCertificateForProduct(product) {
     // Placeholder: empty or lookup table; keep blank by default
     return "";
+}
+
+function resolvePrefixFromUnit(unit) {
+    if (!unit || typeof unit !== "string") return "";
+    return unit.slice(0, 2).toUpperCase();
+}
+
+function formatMasWeight(value) {
+    const weight = Number(value || 0);
+    return weight.toFixed(1);
 }
