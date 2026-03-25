@@ -5,6 +5,26 @@ const { onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const XLSX = require('xlsx');
 
+const TEXT_FORMAT = '@';
+const MAS_HEADER = [
+  'DATE',
+  'TIME',
+  '0',
+  '',
+  'PRODUCT',
+  'UNIT',
+  'GROSS LB',
+  'NET LB',
+  'TARE LB',
+  'QTY',
+  'MATERIAL',
+  'PREFIX',
+  '2003',
+  'UOM',
+];
+const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 admin.initializeApp();
 
 function normalizeUnitNumber(value) {
@@ -28,13 +48,42 @@ function orderRecordsForExcel(records) {
   return decorated.map(({ rec }) => rec);
 }
 
-function formatMasTime(date) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const hours = Number.isNaN(date.getTime()) ? 0 : date.getHours();
-  const minutes = Number.isNaN(date.getTime()) ? 0 : date.getMinutes();
-  const suffix = hours >= 12 ? 'PM' : 'AM';
-  const normalizedHours = hours % 12 || 12;
-  return `${normalizedHours}:${pad(minutes)} ${suffix}`;
+function textCell(value) {
+  return {
+    t: 's',
+    v: value == null ? '' : String(value),
+    z: TEXT_FORMAT,
+  };
+}
+
+function toValidDate(value) {
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateCell(value) {
+  const date = toValidDate(value);
+  if (!date) return textCell('');
+  return {
+    t: 'n',
+    v: (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - EXCEL_EPOCH_MS) / MS_PER_DAY,
+    z: 'mm/dd/yy',
+  };
+}
+
+function timeCell(value) {
+  const date = toValidDate(value);
+  if (!date) return textCell('');
+  return {
+    t: 'n',
+    v: (
+      date.getHours() * 60 * 60 * 1000 +
+      date.getMinutes() * 60 * 1000 +
+      date.getSeconds() * 1000 +
+      date.getMilliseconds()
+    ) / MS_PER_DAY,
+    z: 'h:mm AM/PM',
+  };
 }
 
 function formatMasWeight(value) {
@@ -48,13 +97,6 @@ function resolvePrefixFromUnit(unit) {
 }
 
 function formatForMasExcel(rec) {
-  const dt = new Date((rec && rec.timestamp) || Date.now());
-  const pad = (n) => String(n).padStart(2, '0');
-  const dateStr = `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}/${dt
-    .getFullYear()
-    .toString()
-    .slice(-2)}`;
-  const timeStr = formatMasTime(dt);
   const zero = 0;
   const reissueMarker = isReissueRecord(rec) ? 'RI' : '';
   const product = (rec && rec.product) || '';
@@ -67,42 +109,32 @@ function formatForMasExcel(rec) {
   const prefix = resolvePrefixFromUnit(unit);
   const code2003 = 2003;
   const unitType = 'LB';
-  return [
-    dateStr,
-    timeStr,
-    zero,
-    reissueMarker,
-    product,
-    unit,
-    grossLb,
-    netLb,
-    tareLb,
-    qty,
-    materialNumber,
-    prefix,
-    code2003,
-    unitType,
-  ];
+  return {
+    timestamp: (rec && rec.timestamp) || '',
+    values: [
+      zero,
+      reissueMarker,
+      product,
+      unit,
+      grossLb,
+      netLb,
+      tareLb,
+      qty,
+      materialNumber,
+      prefix,
+      code2003,
+      unitType,
+    ],
+  };
 }
 
-function buildMasHeaderAndRows(rows) {
-  const header = [
-    'DATE',
-    'TIME',
-    '0',
-    '',
-    'PRODUCT',
-    'UNIT',
-    'GROSS LB',
-    'NET LB',
-    'TARE LB',
-    'QTY',
-    'MATERIAL',
-    'PREFIX',
-    '2003',
-    'UOM',
-  ];
-  return [header, ...rows];
+function buildMasSheetData(rows) {
+  return [MAS_HEADER.map((value) => textCell(value)), ...rows.map((row) => buildMasSheetRow(row))];
+}
+
+function buildMasSheetRow(row) {
+  const values = Array.isArray(row && row.values) ? row.values : [];
+  return [dateCell(row && row.timestamp), timeCell(row && row.timestamp), ...values.map((value) => textCell(value))];
 }
 
 exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, async (req, res) => {
@@ -143,7 +175,7 @@ exports.exportLabelsToExcel = onRequest({ cors: true, region: 'us-central1' }, a
     const rows = ordered.map((rec) => formatForMasExcel(rec));
 
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+    const worksheet = XLSX.utils.aoa_to_sheet(buildMasSheetData(rows));
     XLSX.utils.book_append_sheet(workbook, worksheet, 'MASOutput');
 
     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
