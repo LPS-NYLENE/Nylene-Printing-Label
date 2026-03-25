@@ -134,7 +134,7 @@ export function initReissueNewFlow() {
         setError("");
         const record = await findLatestPrintRecordByUnit(unit);
         if (record) {
-            // Existing label: no password required, reissue directly
+            // Existing label: no password required, reissue directly.
             setFromRecord(record);
             state.reissueFlag = REISSUE_FLAG;
             state.reissueOriginalUnit = normalizeUnitNumber(record.unitNumber);
