@@ -1,6 +1,10 @@
 import { state } from "./state.js";
 import { lbToKg } from "./utils/format.js";
 import { withExcelSource } from "./utils/export-source.js";
+import {
+    buildMasSheetData,
+    buildObjectSheetData,
+} from "./utils/mas-excel.js";
 import { resolveMaterialNumber } from "./utils/material-numbers.js";
 import {
     savePrintToFirebase,
@@ -91,10 +95,12 @@ async function appendToExcelFile(fileHandle, logs) {
         const wb = XLSX.read(arrayBuffer, { type: "array" });
         const wsName = wb.SheetNames[0] || "Logs";
         const ws = wb.Sheets[wsName];
-        const existing = XLSX.utils.sheet_to_json(ws);
+        const existing = XLSX.utils
+            .sheet_to_json(ws, { raw: false })
+            .map(normalizeExistingLogRow);
         const merged = mergeByTimestamp(existing, logs);
         const ordered = orderRecordsForExcel(merged);
-        const newWs = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
+        const newWs = buildLogsWorksheet(ordered);
         wb.Sheets[wsName] = newWs;
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -103,7 +109,7 @@ async function appendToExcelFile(fileHandle, logs) {
     } catch (e) {
         const wb = XLSX.utils.book_new();
         const ordered = orderRecordsForExcel(logs);
-        const ws = XLSX.utils.json_to_sheet(buildLogsSheetRows(ordered));
+        const ws = buildLogsWorksheet(ordered);
         XLSX.utils.book_append_sheet(wb, ws, "Logs");
         const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const writable = await fileHandle.createWritable();
@@ -129,6 +135,28 @@ function mergeByTimestamp(existingRows, newRows) {
 
 function buildLogsSheetRows(records) {
     return records.map(withExcelSource);
+}
+
+function buildLogsWorksheet(records) {
+    return XLSX.utils.aoa_to_sheet(
+        buildObjectSheetData(buildLogsSheetRows(records), {
+            typeMap: { timestamp: "datetime" },
+        })
+    );
+}
+
+function normalizeExistingLogRow(row) {
+    if (!row || typeof row !== "object") return row;
+    return {
+        ...row,
+        timestamp: normalizeTimestamp(row.timestamp),
+    };
+}
+
+function normalizeTimestamp(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
 
 function isReissueRecord(record) {
@@ -176,7 +204,7 @@ export function bindExcelButton() {
             const ordered = orderRecordsForExcel(firebaseLogs);
             const rows = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+            const ws = buildMasWorksheet(rows);
             XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
             XLSX.writeFile(
                 wb,
@@ -190,7 +218,7 @@ export function bindExcelButton() {
             const ordered = orderRecordsForExcel(loadLogs());
             const logs = ordered.map(formatForMasExcel);
             const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
+            const ws = buildMasWorksheet(logs);
             XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
             XLSX.writeFile(
                 wb,
@@ -207,7 +235,7 @@ export function bindExcelButton() {
                 const ordered = orderRecordsForExcel(firebaseLogs);
                 const rows = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+                const ws = buildMasWorksheet(rows);
                 XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
                 XLSX.writeFile(
                     wb,
@@ -221,7 +249,7 @@ export function bindExcelButton() {
                 const ordered = orderRecordsForExcel(loadLogs());
                 const logs = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(logs));
+                const ws = buildMasWorksheet(logs);
                 XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
                 XLSX.writeFile(
                     wb,
@@ -247,7 +275,7 @@ export function bindExcelButton() {
                 const ordered = orderRecordsForExcel(loadLogs());
                 const rows = ordered.map(formatForMasExcel);
                 const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.aoa_to_sheet(buildMasHeaderAndRows(rows));
+                const ws = buildMasWorksheet(rows);
                 XLSX.utils.book_append_sheet(wb, ws, "MASOutput");
                 XLSX.writeFile(
                     wb,
@@ -279,13 +307,6 @@ async function getCloudExportUrl() {
 
 // Convert an app log record into the MAS Excel row format.
 function formatForMasExcel(rec) {
-    const dt = new Date(rec.timestamp || Date.now());
-    const pad = (n) => String(n).padStart(2, "0");
-    const dateStr = `${pad(dt.getMonth() + 1)}/${pad(dt.getDate())}/${dt
-        .getFullYear()
-        .toString()
-        .slice(-2)}`;
-    const timeStr = formatMasTime(dt);
     const zero = 0;
     const reissueMarker = isReissueRecord(rec) ? "RI" : "";
     const product = rec.product || "";
@@ -300,42 +321,27 @@ function formatForMasExcel(rec) {
     const prefix = resolvePrefixFromUnit(unit);
     const code2003 = 2003;
     const unitType = "LB";
-    return [
-        dateStr,
-        timeStr,
-        zero,
-        reissueMarker,
-        product,
-        unit,
-        grossLb,
-        netLb,
-        tareLb,
-        qty,
-        materialNumber,
-        prefix,
-        code2003,
-        unitType,
-    ];
+    return {
+        timestamp: rec.timestamp || Date.now(),
+        values: [
+            zero,
+            reissueMarker,
+            product,
+            unit,
+            grossLb,
+            netLb,
+            tareLb,
+            qty,
+            materialNumber,
+            prefix,
+            code2003,
+            unitType,
+        ],
+    };
 }
 
-function buildMasHeaderAndRows(rows) {
-    const header = [
-        "DATE",
-        "TIME",
-        "0",
-        "",
-        "PRODUCT",
-        "UNIT",
-        "GROSS LB",
-        "NET LB",
-        "TARE LB",
-        "QTY",
-        "MATERIAL",
-        "PREFIX",
-        "2003",
-        "UOM",
-    ];
-    return [header, ...rows];
+function buildMasWorksheet(rows) {
+    return XLSX.utils.aoa_to_sheet(buildMasSheetData(rows));
 }
 
 function resolveCertificateForProduct(product) {
@@ -353,11 +359,3 @@ function formatMasWeight(value) {
     return weight.toFixed(1);
 }
 
-function formatMasTime(date) {
-    const pad = (n) => String(n).padStart(2, "0");
-    const hours = Number.isNaN(date.getTime()) ? 0 : date.getHours();
-    const minutes = Number.isNaN(date.getTime()) ? 0 : date.getMinutes();
-    const suffix = hours >= 12 ? "PM" : "AM";
-    const normalizedHours = hours % 12 || 12;
-    return `${normalizedHours}:${pad(minutes)} ${suffix}`;
-}
