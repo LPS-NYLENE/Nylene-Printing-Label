@@ -366,13 +366,10 @@ export function initPreviewStep() {
         renderPreview();
     }
 
-    const italicSuffixProducts = new Set(["BX3RF-01", "BX3WQ662X-01"]);
-
     function renderProductName(productEl, productCode) {
         if (!productEl) return;
         const raw = typeof productCode === "string" ? productCode.trim() : "";
         productEl.textContent = "";
-        productEl.classList.remove("product-name--styled-suffix");
         if (!raw) {
             productEl.textContent = "—";
             return;
@@ -383,14 +380,6 @@ export function initPreviewStep() {
             const suffix = match[2];
             productEl.appendChild(document.createTextNode(base));
             productEl.appendChild(document.createElement("br"));
-            if (italicSuffixProducts.has(raw)) {
-                const suffixEl = document.createElement("span");
-                suffixEl.className = "product-name__suffix";
-                suffixEl.textContent = suffix;
-                productEl.classList.add("product-name--styled-suffix");
-                productEl.appendChild(suffixEl);
-                return;
-            }
             productEl.appendChild(document.createTextNode(suffix));
             return;
         }
