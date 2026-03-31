@@ -1,6 +1,23 @@
 {
-  /* Visit https://firebase.google.com/docs/database/security to learn more about security rules. */
   "rules": {
+    "prints": {
+      ".read": "auth != null",
+      "$day": {
+        ".write": "auth != null",
+        "$printId": {
+          ".validate": "newData.hasChildren(['timestamp', 'unitNumber', 'product'])"
+        }
+      }
+    },
+    "sharedProducts": {
+      ".read": "auth != null",
+      "catalog": {
+        ".write": "auth != null"
+      },
+      "selections": {
+        ".write": "auth != null"
+      }
+    },
     ".read": false,
     ".write": false
   }
