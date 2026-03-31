@@ -2,9 +2,9 @@ import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { findLatestPrintRecordByUnit } from "../utils/print-records.js";
 import {
-    getProductCode,
-    getSelectableProductRecords,
-} from "../product-sync.js";
+    COPERION_PRODUCT_CHOICES,
+    PR_PRODUCT_CHOICES,
+} from "../catalog/product-choices.js";
 
 const REISSUE_FLAG = "RI";
 
@@ -45,8 +45,7 @@ export function initReissueFlow() {
     function setReissueProductOptions({ isCoperion, currentValue }) {
         if (!editProduct) return;
         const current = String(currentValue || "").trim();
-        const flow = isCoperion ? "coperion" : "pr";
-        const base = getSelectableProductRecords(flow).map((record) => record.code);
+        const base = isCoperion ? COPERION_PRODUCT_CHOICES : PR_PRODUCT_CHOICES;
 
         // Ensure current value is selectable even if it's not in the current list.
         const seen = new Set();
@@ -182,10 +181,7 @@ export function initReissueFlow() {
     async function handleConfirmEdit() {
         if (!activeRecord) return;
         const unit = normalizeUnit(editUnitNumber?.value || "");
-        const product = getProductCode(
-            isCoperionRecord(activeRecord) ? "coperion" : "pr",
-            String(editProduct?.value || "").trim(),
-        );
+        const product = String(editProduct?.value || "").trim();
         const netRaw = String(editNet?.value || "").trim();
         const grossRaw = String(editGross?.value || "").trim();
         if (!unit) {
