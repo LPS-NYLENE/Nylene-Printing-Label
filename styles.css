@@ -40,17 +40,6 @@ body {
     white-space: nowrap;
 }
 
-.product-name--styled-suffix {
-    line-height: 0.92;
-}
-
-.product-name__suffix {
-    display: inline-block;
-    font-size: 0.52em;
-    font-style: italic;
-    letter-spacing: 1px;
-}
-
 .screen {
     display: none;
 }
