@@ -329,7 +329,15 @@ body {
 }
 
 .big-code {
-    font-size: 90px;
+    font-size: 95px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-align: left;
+    width: 1px;
+}
+
+.big-code-1 {
+    font-size: 70px;
     font-weight: 600;
     letter-spacing: 4px;
     text-align: left;
