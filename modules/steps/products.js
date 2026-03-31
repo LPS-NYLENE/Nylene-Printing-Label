@@ -1,20 +1,31 @@
 import {
     state,
     showScreen,
-    loadProductForContext,
-    saveProductForContext,
-    loadProductSlotsForContext,
-    saveProductSlotsForContext,
     isTwoSlotProductContext,
     getActiveProductFromSlots,
     formatProductForDisplay,
     BLANK_PRODUCT_LABEL,
 } from "../state.js";
-
 import {
     PR_DEFAULT_PRODUCT,
     PR_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
+import {
+    fetchProductSelectionFromFirebase,
+    saveProductSelectionToFirebase,
+    subscribeToProductSelection,
+} from "../firebase-db.js";
+import {
+    buildProductSelectionContext,
+    buildSharedProductSelectionPayload,
+    clearLegacyProductSelection,
+    normalizeSharedProductSelection,
+    readLegacyProductSelection,
+} from "../utils/product-selection.js";
+
+let unsubscribeProductSelection = () => {};
+let subscribedContextKey = null;
+
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
     if (back) back.addEventListener("click", () => showScreen("source"));
@@ -74,8 +85,6 @@ export function initProductsStep() {
     const inlineWrap = document.getElementById("productInlineChoicesWrap");
     const inlineChoicesEl = document.getElementById("productInlineChoices");
 
-    // Per-context storage helpers are centralized in state.js
-
     function syncBigCodeToActiveSlot() {
         const active = isTwoSlotProductContext(state.activeGroup)
             ? getActiveProductFromSlots(
@@ -94,6 +103,143 @@ export function initProductsStep() {
         return state.reissueFlowType === "new";
     }
 
+    function getCurrentSelectionContext() {
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : null;
+        return buildProductSelectionContext(group, letter, false);
+    }
+
+    function isCurrentSelectionContext(context) {
+        const current = getCurrentSelectionContext();
+        return Boolean(current && context && current.key === context.key);
+    }
+
+    function getSelectionOptions(group = state.activeGroup) {
+        return {
+            allowedProducts: PR_PRODUCT_CHOICES,
+            defaultProduct: PR_DEFAULT_PRODUCT,
+            twoSlot: isTwoSlotProductContext(group),
+        };
+    }
+
+    function getPersistedSelection(selection, options) {
+        return normalizeSharedProductSelection(selection, {
+            ...options,
+            defaultProduct: null,
+        });
+    }
+
+    function selectionMatches(selection, expected, options) {
+        const normalized = getPersistedSelection(selection, options);
+        return (
+            normalized.primary === (expected && expected.primary ? expected.primary : null) &&
+            normalized.secondary ===
+                (expected && expected.secondary ? expected.secondary : null)
+        );
+    }
+
+    function applySharedSelectionToState(selection, group = state.activeGroup) {
+        const options = getSelectionOptions(group);
+        const normalized = normalizeSharedProductSelection(selection, options);
+        state.productSlots = {
+            primary: normalized.primary,
+            secondary: options.twoSlot ? normalized.secondary : null,
+        };
+        if (!options.twoSlot) state.activeProductSlot = "primary";
+        syncBigCodeToActiveSlot();
+        return normalized;
+    }
+
+    async function persistCurrentSelection() {
+        const context = getCurrentSelectionContext();
+        if (!context) return false;
+        const options = getSelectionOptions(context.sourceGroup);
+        const payload = buildSharedProductSelectionPayload(
+            context,
+            state.productSlots,
+            options,
+        );
+        const saved = await saveProductSelectionToFirebase(context, payload);
+        if (saved) {
+            clearLegacyProductSelection(context);
+            return true;
+        }
+        return false;
+    }
+
+    async function persistCurrentSelectionWithCleanupIfNeeded(
+        shouldCleanupLegacy = false,
+    ) {
+        const saved = await persistCurrentSelection();
+        if (saved && shouldCleanupLegacy) {
+            const context = getCurrentSelectionContext();
+            if (context) clearLegacyProductSelection(context);
+        }
+        return saved;
+    }
+
+    function refreshProductsUI() {
+        renderProducts();
+        document.dispatchEvent(new CustomEvent("updatePreview"));
+    }
+
+    function subscribeForCurrentContext() {
+        const context = getCurrentSelectionContext();
+        const nextKey = context ? context.key : null;
+        if (nextKey && subscribedContextKey === nextKey) return;
+        unsubscribeProductSelection();
+        unsubscribeProductSelection = () => {};
+        subscribedContextKey = nextKey;
+        if (!context) return;
+
+        unsubscribeProductSelection = subscribeToProductSelection(
+            context,
+            (selection) => {
+                if (!isCurrentSelectionContext(context)) return;
+                const options = getSelectionOptions(context.sourceGroup);
+                const normalized = applySharedSelectionToState(
+                    selection,
+                    context.sourceGroup,
+                );
+                if (selection) clearLegacyProductSelection(context);
+                refreshProductsUI();
+                if (!selectionMatches(selection, normalized, options)) {
+                    void persistCurrentSelectionWithCleanupIfNeeded(!selection);
+                }
+            },
+            () => {},
+        );
+    }
+
+    async function ensureSharedSelectionForCurrentContext() {
+        const context = getCurrentSelectionContext();
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : null;
+        const metaEl = document.getElementById("productMeta");
+        if (metaEl)
+            metaEl.textContent =
+                group && letter ? `${group.toUpperCase()} ${letter}` : "";
+        if (!context) {
+            applySharedSelectionToState(null, group);
+            return;
+        }
+
+        const options = getSelectionOptions(context.sourceGroup);
+        const remoteSelection = await fetchProductSelectionFromFirebase(context);
+        const resolvedSelection =
+            (remoteSelection &&
+                normalizeSharedProductSelection(remoteSelection, options)) ||
+            readLegacyProductSelection(context, options) ||
+            normalizeSharedProductSelection(null, options);
+
+        applySharedSelectionToState(resolvedSelection, context.sourceGroup);
+        if (remoteSelection) clearLegacyProductSelection(context);
+
+        if (!selectionMatches(remoteSelection, resolvedSelection, options)) {
+            await persistCurrentSelectionWithCleanupIfNeeded(!remoteSelection);
+        }
+    }
+
     function setInlineSelectionModeUI(on) {
         if (hintEl)
             hintEl.textContent = on
@@ -101,36 +247,6 @@ export function initProductsStep() {
                 : "Only one product is shown by default.";
         if (inlineWrap) inlineWrap.classList.toggle("hidden", !on);
         if (changeBtn) changeBtn.classList.toggle("hidden", on);
-    }
-
-    function ensureContextAndDefaultProduct() {
-        const group = state.activeGroup;
-        const letter = group ? state.source[group] : null;
-        const metaEl = document.getElementById("productMeta");
-        if (metaEl)
-            metaEl.textContent =
-                group && letter ? `${group.toUpperCase()} ${letter}` : "";
-
-        if (isTwoSlotProductContext(group)) {
-            const savedSlots = loadProductSlotsForContext(group, letter);
-            const primary = savedSlots.primary || PR_DEFAULT_PRODUCT;
-            const secondary = savedSlots.secondary || null;
-            state.productSlots = { primary, secondary };
-            if (state.activeProductSlot !== "secondary")
-                state.activeProductSlot = "primary";
-            // Persist the normalized slots in case we migrated from legacy single value.
-            saveProductSlotsForContext(group, letter, state.productSlots);
-            syncBigCodeToActiveSlot();
-            return;
-        }
-
-        // Bulk / Silo remains single-slot.
-        const savedForContext = loadProductForContext(group, letter);
-        const product = savedForContext || PR_DEFAULT_PRODUCT;
-        state.productSlots = { primary: product, secondary: null };
-        state.activeProductSlot = "primary";
-        state.selectedProduct = product;
-        state.bigCode = product;
     }
 
     function setProceedEnabled(enabled) {
@@ -215,8 +331,8 @@ export function initProductsStep() {
                     state.activeProductSlot = "primary";
                     state.selectedProduct = prod;
                     state.bigCode = prod;
-                    saveProductForContext(group, letter, prod);
-                    renderProducts();
+                    refreshProductsUI();
+                    void persistCurrentSelection();
                     return;
                 }
 
@@ -232,9 +348,9 @@ export function initProductsStep() {
                 } else {
                     state.productSlots.secondary = isBlank ? null : prod;
                 }
-                saveProductSlotsForContext(group, letter, state.productSlots);
                 syncBigCodeToActiveSlot();
-                renderProducts();
+                refreshProductsUI();
+                void persistCurrentSelection();
             });
             inlineChoicesEl.appendChild(btn);
         });
@@ -304,7 +420,8 @@ export function initProductsStep() {
                     state.activeProductSlot = "primary";
                     state.selectedProduct = prod;
                     state.bigCode = prod;
-                    saveProductForContext(group, letter, prod);
+                    refreshProductsUI();
+                    void persistCurrentSelection();
                     return;
                 }
 
@@ -322,8 +439,9 @@ export function initProductsStep() {
                 } else {
                     state.productSlots.secondary = isBlank ? null : prod;
                 }
-                saveProductSlotsForContext(group, letter, state.productSlots);
                 syncBigCodeToActiveSlot();
+                refreshProductsUI();
+                void persistCurrentSelection();
             });
             choicesEl.appendChild(btn);
         });
@@ -359,11 +477,13 @@ export function initProductsStep() {
         });
 
     document.addEventListener("renderProductList", () => {
-        ensureContextAndDefaultProduct();
-        renderProducts();
+        void (async () => {
+            await ensureSharedSelectionForCurrentContext();
+            subscribeForCurrentContext();
+            renderProducts();
+        })();
     });
 
     // Initial render
-    ensureContextAndDefaultProduct();
     renderProducts();
 }

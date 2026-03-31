@@ -1,10 +1,10 @@
+import { state, showScreen } from "../state.js";
 import {
-    state,
-    showScreen,
-    loadProductForContext,
-    saveProductForContext,
-} from "../state.js";
-import { getAppInstance } from "../firebase-db.js";
+    fetchProductSelectionFromFirebase,
+    getAppInstance,
+    saveProductSelectionToFirebase,
+    subscribeToProductSelection,
+} from "../firebase-db.js";
 import {
     getAuth,
     signOut,
@@ -14,13 +14,21 @@ import {
     COPERION_DEFAULT_PRODUCT,
     COPERION_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
-
-const CoperionProductStorageKey = "coperion_selected_product_v1";
+import {
+    buildProductSelectionContext,
+    buildSharedProductSelectionPayload,
+    clearLegacyProductSelection,
+    normalizeSharedProductSelection,
+    readLegacyProductSelection,
+} from "../utils/product-selection.js";
 
 function normalizeCoperionProduct(product) {
     const normalized = String(product || "").trim();
     return COPERION_PRODUCT_CHOICES.includes(normalized) ? normalized : null;
 }
+
+let unsubscribeProductSelection = () => {};
+let subscribedContextKey = null;
 
 export function initCoperionStep() {
     const back = document.getElementById("backToSourceFromCoperion");
@@ -44,35 +52,100 @@ export function initCoperionStep() {
     const cancelProductsBtn = document.getElementById("coperionCancelProducts");
     const choicesEl = document.getElementById("coperionProductChoices");
     const logoutBtn = document.getElementById("btnLogoutCoperion");
+    function getCurrentSelectionContext() {
+        return buildProductSelectionContext("compound", "A", true);
+    }
 
-    // Legacy local key kept for backward compatibility (read once if contextual empty)
+    function getSelectionOptions() {
+        return {
+            allowedProducts: COPERION_PRODUCT_CHOICES,
+            defaultProduct: COPERION_DEFAULT_PRODUCT,
+            twoSlot: false,
+        };
+    }
+
+    function applySharedSelectionToState(selection) {
+        const normalized = normalizeSharedProductSelection(
+            selection,
+            getSelectionOptions(),
+        );
+        state.selectedProduct =
+            normalizeCoperionProduct(normalized.primary) || COPERION_DEFAULT_PRODUCT;
+        state.productSlots = { primary: state.selectedProduct, secondary: null };
+        state.activeProductSlot = "primary";
+        state.bigCode = state.selectedProduct;
+        return normalized;
+    }
+
+    function refreshCoperionUI() {
+        renderDefaultProduct();
+        document.dispatchEvent(new CustomEvent("updatePreview"));
+    }
+
+    async function persistCurrentSelection() {
+        const context = getCurrentSelectionContext();
+        const payload = buildSharedProductSelectionPayload(
+            context,
+            { primary: state.selectedProduct, secondary: null },
+            getSelectionOptions(),
+        );
+        const saved = await saveProductSelectionToFirebase(context, payload);
+        if (saved) clearLegacyProductSelection(context);
+        return saved;
+    }
+
+    function selectionMatches(selection, expected) {
+        const normalized = normalizeSharedProductSelection(
+            selection,
+            getSelectionOptions(),
+        );
+        return normalized.primary === (expected && expected.primary
+            ? expected.primary
+            : null);
+    }
+
+    function subscribeForCurrentContext() {
+        const context = getCurrentSelectionContext();
+        if (subscribedContextKey === context.key) return;
+        unsubscribeProductSelection();
+        subscribedContextKey = context.key;
+        unsubscribeProductSelection = subscribeToProductSelection(context, (selection) => {
+            if (getCurrentSelectionContext().key !== context.key) return;
+            const normalized = applySharedSelectionToState(selection);
+            refreshCoperionUI();
+            if (!selectionMatches(selection, normalized)) {
+                void persistCurrentSelection();
+            } else if (selection) {
+                clearLegacyProductSelection(context);
+            }
+        });
+    }
 
     // Ensure base selection and numbering context when entering Coperion
-    function prepareCoperionContext() {
+    async function prepareCoperionContext() {
         state.activeGroup = "compound";
         state.source.compound = "A"; // default mapping for Coperion
         state.isCoperion = true;
-        const group = state.activeGroup;
-        const letter = state.source.compound;
-        const contextual = normalizeCoperionProduct(
-            loadProductForContext(group, letter),
-        );
-        // If nothing in contextual store, fall back to older single-key stores once.
-        const legacy = (function legacyRead() {
-            try {
-                return normalizeCoperionProduct(
-                    localStorage.getItem(CoperionProductStorageKey),
-                );
-            } catch {
-                return null;
+        const context = getCurrentSelectionContext();
+        const options = getSelectionOptions();
+        const remoteSelection = await fetchProductSelectionFromFirebase(context);
+        const current =
+            normalizeCoperionProduct(state.selectedProduct) || null;
+        const resolvedSelection =
+            (remoteSelection &&
+                normalizeSharedProductSelection(remoteSelection, options)) ||
+            readLegacyProductSelection(context, options) ||
+            normalizeSharedProductSelection(current, options);
+        applySharedSelectionToState(resolvedSelection);
+        if (!selectionMatches(remoteSelection, resolvedSelection)) {
+            const saved = await persistCurrentSelection();
+            if (!saved && remoteSelection) {
+                clearLegacyProductSelection(context);
             }
-        })();
-        const current = normalizeCoperionProduct(state.selectedProduct);
-        state.selectedProduct =
-            contextual || current || legacy || COPERION_DEFAULT_PRODUCT;
-        saveProductForContext(group, letter, state.selectedProduct);
-        // Always reflect the chosen product in the big code
-        state.bigCode = state.selectedProduct;
+        } else if (remoteSelection) {
+            clearLegacyProductSelection(context);
+        }
+        subscribeForCurrentContext();
         // Refresh the unit number from Firebase using Coperion-specific numbering
         (async () => {
             try {
@@ -134,10 +207,11 @@ export function initCoperionStep() {
                     .forEach((x) => x.classList.remove("selected"));
                 btn.classList.add("selected");
                 state.selectedProduct = prod;
+                state.productSlots = { primary: prod, secondary: null };
+                state.activeProductSlot = "primary";
                 state.bigCode = prod;
-                const group = state.activeGroup;
-                const letter = state.source.compound;
-                saveProductForContext(group, letter, prod);
+                refreshCoperionUI();
+                void persistCurrentSelection();
             });
             choicesEl.appendChild(btn);
         });
@@ -193,7 +267,9 @@ export function initCoperionStep() {
 
     // Initialize Coperion screen when user navigates to it
     document.addEventListener("enterCoperion", () => {
-        prepareCoperionContext();
-        renderDefaultProduct();
+        void (async () => {
+            await prepareCoperionContext();
+            renderDefaultProduct();
+        })();
     });
 }
