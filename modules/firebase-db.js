@@ -14,6 +14,8 @@ import {
     push,
     serverTimestamp,
     get,
+    set,
+    onValue,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
     getNextPrSequenceFromRecords,
@@ -48,10 +50,76 @@ export function getAppInstance() {
     return initializeApp(firebaseConfig);
 }
 
+function getDatabaseInstance() {
+    const app = getAppInstance();
+    return getDatabase(app);
+}
+
+function sanitizeProductSelectionPathSegment(value) {
+    return String(value || "")
+        .trim()
+        .replace(/[.#$[\]/]/g, "_");
+}
+
+function makeProductSelectionPath(context) {
+    if (!context || !context.flow || !context.sourceGroup || !context.sourceLetter) {
+        return null;
+    }
+    const flow = sanitizeProductSelectionPathSegment(context.flow);
+    const group = sanitizeProductSelectionPathSegment(context.sourceGroup);
+    const letter = sanitizeProductSelectionPathSegment(context.sourceLetter);
+    return `productSelections/${flow}/${group}/${letter}`;
+}
+
+export async function saveProductSelectionToFirebase(context, selection) {
+    const path = makeProductSelectionPath(context);
+    if (!path) return false;
+    try {
+        const db = getDatabaseInstance();
+        await set(ref(db, path), {
+            ...(selection || {}),
+            _updatedAt: serverTimestamp(),
+        });
+        return true;
+    } catch (err) {
+        console.warn("Firebase product selection save failed", err);
+        return false;
+    }
+}
+
+export async function fetchProductSelectionFromFirebase(context) {
+    const path = makeProductSelectionPath(context);
+    if (!path) return null;
+    try {
+        const db = getDatabaseInstance();
+        const snap = await get(ref(db, path));
+        return snap.exists() ? snap.val() : null;
+    } catch (err) {
+        console.warn("Firebase product selection fetch failed", err);
+        return null;
+    }
+}
+
+export function subscribeToProductSelection(context, onChange, onError) {
+    const path = makeProductSelectionPath(context);
+    if (!path) return () => {};
+    const db = getDatabaseInstance();
+    const selectionRef = ref(db, path);
+    return onValue(
+        selectionRef,
+        (snap) => {
+            onChange(snap.exists() ? snap.val() : null);
+        },
+        (error) => {
+            console.warn("Firebase product selection subscription failed", error);
+            if (typeof onError === "function") onError(error);
+        },
+    );
+}
+
 export async function savePrintToFirebase(record) {
     try {
-        const app = getAppInstance();
-        const db = getDatabase(app);
+        const db = getDatabaseInstance();
 
         // Use LOCAL day key (YYYY-MM-DD) so Firebase buckets match the operator's "today".
         // Note: timestamp remains ISO/UTC; only the bucket key is localized.
@@ -81,8 +149,7 @@ export async function savePrintToFirebase(record) {
 // Sorted by timestamp ascending. Each item mirrors the schema saved by
 // savePrintToFirebase.
 export async function fetchAllPrintsFromFirebase() {
-    const app = getAppInstance();
-    const db = getDatabase(app);
+    const db = getDatabaseInstance();
     const rootRef = ref(db, "prints");
     const snap = await get(rootRef);
     const rows = [];
@@ -111,8 +178,7 @@ export async function fetchAllPrintsFromFirebase() {
 // day keys. For backward compatibility, we read both local and UTC buckets.
 // Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
-    const app = getAppInstance();
-    const db = getDatabase(app);
+    const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
     // Apply the app's 00:01 rule: 00:00-00:01 belongs to previous day
     const effective = new Date(input);
@@ -164,8 +230,7 @@ function getDayOfYear(date) {
 // - Increments based on existing regular (non-RI) records in DB that match the day's EA prefix
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
-    const app = getAppInstance();
-    const db = getDatabase(app);
+    const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
 
     // Apply 00:01 rule: 00:00-00:01 belongs to previous day
@@ -211,8 +276,7 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 // - Increments based on existing regular (non-RI) matching records in DB
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
-    const app = getAppInstance();
-    const db = getDatabase(app);
+    const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
 
     // Apply 00:01 rule: 00:00-00:01 belongs to previous day
