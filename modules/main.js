@@ -15,7 +15,6 @@ import { initLabelDatabaseStep } from "./steps/labeldatabase.js";
 import { initCoperionStep } from "./steps/coperion.js";
 import { initAuthStep } from "./steps/auth.js";
 import { applyExcelButtonAccess } from "./access.js";
-import { startProductSync } from "./product-sync.js";
 
 async function loadFragment(path) {
     const res = await fetch(path, { cache: "no-store" });
@@ -25,7 +24,6 @@ async function loadFragment(path) {
 
 async function bootstrap() {
     const app = document.getElementById("app");
-    void startProductSync();
     const [auth, src, prod, wts, prv, ldb, cop] = await Promise.all([
         loadFragment("/screens/auth.html"),
         loadFragment("/screens/p&rsource.html"),
