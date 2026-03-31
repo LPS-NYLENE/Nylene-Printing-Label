@@ -329,7 +329,7 @@ body {
 }
 
 .big-code {
-    font-size: 95px;
+    font-size: 70px;
     font-weight: 600;
     letter-spacing: 4px;
     text-align: left;
@@ -337,7 +337,7 @@ body {
 }
 
 .big-code-1 {
-    font-size: 70px;
+    font-size: 76px;
     font-weight: 600;
     letter-spacing: 4px;
     text-align: left;
@@ -354,7 +354,7 @@ body {
     flex-direction: column;
     align-items: baseline;
     text-align: end;
-    margin-top: 140px;
+    /* margin-top: 140px; */
 }
 
 .label-main {
