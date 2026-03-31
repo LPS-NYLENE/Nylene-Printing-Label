@@ -18,6 +18,11 @@ import { buildPrintedSnapshotFromState } from "../utils/reprint-snapshot.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
+import {
+    getProductDescription,
+    getProductDisplayLabel,
+    getProductName,
+} from "../product-sync.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -368,7 +373,11 @@ export function initPreviewStep() {
 
     function renderProductName(productEl, productCode) {
         if (!productEl) return;
-        const raw = typeof productCode === "string" ? productCode.trim() : "";
+        const flow = state.isCoperion ? "coperion" : "pr";
+        const resolved =
+            getProductDisplayLabel(flow, productCode) ||
+            (typeof productCode === "string" ? productCode.trim() : "");
+        const raw = typeof resolved === "string" ? resolved.trim() : "";
         productEl.textContent = "";
         if (!raw) {
             productEl.textContent = "—";
@@ -430,8 +439,17 @@ export function initPreviewStep() {
         if (unit) unit.textContent = state.bigCode;
 
         const productEl = document.getElementById("productName");
+        const productMetaEl = document.getElementById("previewProductMeta");
         const sourceEl = document.getElementById("sourceChosen");
         renderProductName(productEl, state.bigCode);
+        if (productMetaEl) {
+            const flow = state.isCoperion ? "coperion" : "pr";
+            const name = getProductName(flow, state.bigCode);
+            const description = getProductDescription(flow, state.bigCode);
+            const meta = [name, description].filter(Boolean).join(" - ");
+            productMetaEl.textContent = meta;
+            productMetaEl.classList.toggle("hidden", !meta);
+        }
         if (sourceEl) {
             const group = state.activeGroup;
             const letter = group ? state.source[group] : null;
@@ -486,4 +504,8 @@ export function initPreviewStep() {
                       ? "Reissue"
                       : "Print";
     }
+
+    document.addEventListener("productCatalogSync", () => {
+        renderPreview();
+    });
 }

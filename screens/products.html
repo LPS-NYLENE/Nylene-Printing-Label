@@ -5,6 +5,7 @@
     </header>
     <div id="productMeta" class="muted-text"></div>
     <div id="productsHint" class="muted-text">Only one product is shown by default.</div>
+    <div id="productDetails" class="product-details hidden"></div>
     <div id="productList" class="product-list"></div>
     <div id="productInlineChoicesWrap" class="product-list-wrap hidden">
         <div id="productInlineChoices" class="product-list"></div>
@@ -20,6 +21,9 @@
             "
         >
             <div class="right-buttons">
+                <button id="btnPrEditProduct" class="btn tertiary">
+                    Edit selected product
+                </button>
                 <button id="btnPrChangeProducts" class="btn tertiary">
                     Change products
                 </button>
@@ -81,6 +85,38 @@
                     <div class="spacer"></div>
                     <button id="prDone" class="btn primary">Done</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div id="prEditModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Edit selected product</h3>
+            <div id="prEditMeta" class="muted-text"></div>
+            <div class="form">
+                <label>
+                    Product code
+                    <input id="prEditCode" type="text" maxlength="64" />
+                </label>
+                <label>
+                    Product name
+                    <input id="prEditName" type="text" maxlength="128" />
+                </label>
+                <label>
+                    Description
+                    <input id="prEditDescription" type="text" maxlength="256" />
+                </label>
+            </div>
+            <div
+                id="prEditError"
+                class="form-error"
+                role="alert"
+                aria-live="polite"
+                style="margin-top: 12px"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="prEditCancel" class="btn secondary">Cancel</button>
+                <div class="spacer"></div>
+                <button id="prEditSave" class="btn primary">Save</button>
             </div>
         </div>
     </div>
