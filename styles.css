@@ -359,7 +359,7 @@ body {
 
 .label-main {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* left column + right column */
+    grid-template-columns: 1fr 1fr; /* left column + right colum */
     gap: 20px;
     align-items: start;
 }
