@@ -64,3 +64,14 @@ export const COPERION_PRODUCT_CHOICES = dedupeStable([
     "BX3RF-01",
     "BX3LF",
 ]);
+
+export const DEFAULT_PRODUCT_CATALOG = Object.freeze({
+    pr: Object.freeze({
+        defaultProductCode: PR_DEFAULT_PRODUCT,
+        products: Object.freeze(PR_PRODUCT_CHOICES.slice()),
+    }),
+    coperion: Object.freeze({
+        defaultProductCode: COPERION_DEFAULT_PRODUCT,
+        products: Object.freeze(COPERION_PRODUCT_CHOICES.slice()),
+    }),
+});

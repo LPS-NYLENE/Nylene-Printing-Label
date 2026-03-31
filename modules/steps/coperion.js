@@ -3,6 +3,7 @@ import {
     showScreen,
     loadProductForContext,
     saveProductForContext,
+    syncActiveProductStateFromCurrentContext,
 } from "../state.js";
 import { getAppInstance } from "../firebase-db.js";
 import {
@@ -11,15 +12,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
 import {
-    COPERION_DEFAULT_PRODUCT,
-    COPERION_PRODUCT_CHOICES,
-} from "../catalog/product-choices.js";
+    getProductDescription,
+    getProductDisplayLabel,
+    getProductRecord,
+    getSelectableProductRecords,
+    updateProductRecord,
+} from "../product-sync.js";
 
 const CoperionProductStorageKey = "coperion_selected_product_v1";
 
 function normalizeCoperionProduct(product) {
-    const normalized = String(product || "").trim();
-    return COPERION_PRODUCT_CHOICES.includes(normalized) ? normalized : null;
+    return String(product || "").trim() || null;
 }
 
 export function initCoperionStep() {
@@ -44,6 +47,17 @@ export function initCoperionStep() {
     const cancelProductsBtn = document.getElementById("coperionCancelProducts");
     const choicesEl = document.getElementById("coperionProductChoices");
     const logoutBtn = document.getElementById("btnLogoutCoperion");
+    const detailsEl = document.getElementById("coperionProductDetails");
+    const editBtn = document.getElementById("btnEditCoperionProduct");
+    const editModal = document.getElementById("coperionEditModal");
+    const editCodeInput = document.getElementById("coperionEditCode");
+    const editNameInput = document.getElementById("coperionEditName");
+    const editDescriptionInput = document.getElementById(
+        "coperionEditDescription",
+    );
+    const editErrorEl = document.getElementById("coperionEditError");
+    const editCancelBtn = document.getElementById("coperionEditCancel");
+    const editSaveBtn = document.getElementById("coperionEditSave");
 
     // Legacy local key kept for backward compatibility (read once if contextual empty)
 
@@ -68,11 +82,9 @@ export function initCoperionStep() {
             }
         })();
         const current = normalizeCoperionProduct(state.selectedProduct);
-        state.selectedProduct =
-            contextual || current || legacy || COPERION_DEFAULT_PRODUCT;
-        saveProductForContext(group, letter, state.selectedProduct);
+        state.selectedProduct = contextual || current || legacy || null;
         // Always reflect the chosen product in the big code
-        state.bigCode = state.selectedProduct;
+        syncActiveProductStateFromCurrentContext({ persistDefault: true });
         // Refresh the unit number from Firebase using Coperion-specific numbering
         (async () => {
             try {
@@ -93,11 +105,91 @@ export function initCoperionStep() {
         ctn.innerHTML = "";
         const b = document.createElement("button");
         b.className = "btn product-btn selected";
-        b.textContent = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
+        b.textContent =
+            getProductDisplayLabel("coperion", state.selectedProduct) ||
+            state.selectedProduct ||
+            "Select a product";
         b.addEventListener("click", () => {
-            // no-op: single visible product by defaultt
+            // no-op: single visible product by default
         });
         ctn.appendChild(b);
+        renderProductDetails();
+    }
+
+    function renderProductDetails() {
+        if (!detailsEl) return;
+        const description = getProductDescription("coperion", state.selectedProduct);
+        const label =
+            getProductDisplayLabel("coperion", state.selectedProduct) ||
+            state.selectedProduct ||
+            "";
+        if (!label && !description) {
+            detailsEl.classList.add("hidden");
+            detailsEl.textContent = "";
+            return;
+        }
+        detailsEl.textContent = [label, description].filter(Boolean).join(" - ");
+        detailsEl.classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+        if (!editModal) return;
+        editModal.classList.add("hidden");
+        if (editErrorEl) editErrorEl.textContent = "";
+    }
+
+    function openEditModal() {
+        const record = getProductRecord("coperion", state.selectedProduct);
+        if (!record) {
+            alert("Select a product before editing it.");
+            return;
+        }
+        if (editCodeInput) editCodeInput.value = record.code || "";
+        if (editNameInput) editNameInput.value = record.name || "";
+        if (editDescriptionInput) {
+            editDescriptionInput.value = record.description || "";
+        }
+        if (editErrorEl) editErrorEl.textContent = "";
+        if (editModal) editModal.classList.remove("hidden");
+        if (editCodeInput) editCodeInput.focus();
+    }
+
+    async function saveEditedProduct() {
+        const record = getProductRecord("coperion", state.selectedProduct);
+        if (!record) {
+            if (editErrorEl) editErrorEl.textContent = "Selected product not found.";
+            return;
+        }
+        const code = String(editCodeInput?.value || "").trim();
+        const name = String(editNameInput?.value || "").trim();
+        const description = String(editDescriptionInput?.value || "").trim();
+        if (!code) {
+            if (editErrorEl) editErrorEl.textContent = "Enter a product code.";
+            return;
+        }
+        if (editSaveBtn) {
+            editSaveBtn.disabled = true;
+            editSaveBtn.textContent = "Saving...";
+        }
+        try {
+            await updateProductRecord("coperion", record.id, {
+                code,
+                name,
+                description,
+            });
+            closeEditModal();
+        } catch (err) {
+            console.warn("Failed to save Coperion product", err);
+            if (editErrorEl) {
+                editErrorEl.textContent =
+                    "Unable to save product changes. Please try again.";
+            }
+        } finally {
+            if (editSaveBtn) {
+                editSaveBtn.disabled = false;
+                editSaveBtn.textContent = "Save";
+            }
+        }
     }
 
     function openModal() {
@@ -122,12 +214,13 @@ export function initCoperionStep() {
         if (stageChoices) stageChoices.classList.remove("hidden");
         if (!choicesEl) return;
         choicesEl.innerHTML = "";
-        COPERION_PRODUCT_CHOICES.forEach((prod) => {
+        getSelectableProductRecords("coperion").forEach((record) => {
+            const prod = record.code;
             const btn = document.createElement("button");
             btn.className =
                 "btn product-btn" +
                 (state.selectedProduct === prod ? " selected" : "");
-            btn.textContent = prod;
+            btn.textContent = getProductDisplayLabel("coperion", prod) || prod;
             btn.addEventListener("click", () => {
                 choicesEl
                     .querySelectorAll(".btn")
@@ -147,10 +240,17 @@ export function initCoperionStep() {
         changeBtn.addEventListener("click", () => {
             openModal();
         });
+    if (editBtn) editBtn.addEventListener("click", () => openEditModal());
 
     if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal());
     if (cancelProductsBtn)
         cancelProductsBtn.addEventListener("click", () => closeModal());
+    if (editCancelBtn)
+        editCancelBtn.addEventListener("click", () => closeEditModal());
+    if (editSaveBtn)
+        editSaveBtn.addEventListener("click", () => {
+            void saveEditedProduct();
+        });
 
     if (unlockBtn)
         unlockBtn.addEventListener("click", () => {
@@ -171,7 +271,7 @@ export function initCoperionStep() {
     if (proceed)
         proceed.addEventListener("click", () => {
             // Bind product to state and move to weight
-            state.bigCode = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
+            state.bigCode = state.selectedProduct || "";
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
             const gross = document.getElementById("grossWeight");
@@ -194,6 +294,20 @@ export function initCoperionStep() {
     // Initialize Coperion screen when user navigates to it
     document.addEventListener("enterCoperion", () => {
         prepareCoperionContext();
+        renderDefaultProduct();
+    });
+    document.addEventListener("productCatalogSync", () => {
+        if (!state.isCoperion) return;
+        syncActiveProductStateFromCurrentContext({ persistDefault: true });
+        renderDefaultProduct();
+        if (modal && !modal.classList.contains("hidden") && stageChoices) {
+            const showingChoices = !stageChoices.classList.contains("hidden");
+            if (showingChoices) showChoices();
+        }
+    });
+    document.addEventListener("productSelectionSync", () => {
+        if (!state.isCoperion) return;
+        syncActiveProductStateFromCurrentContext({ persistDefault: true });
         renderDefaultProduct();
     });
 }

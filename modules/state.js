@@ -1,5 +1,11 @@
 // Central state and shared screen helpers
-import { generateBigCode } from './utils/generators.js';
+import { generateBigCode } from "./utils/generators.js";
+import {
+    getProductCodesForContext,
+    getDefaultProductRecord,
+    saveSharedProductSelection,
+    saveSharedProductSlots,
+} from "./product-sync.js";
 
 export const state = {
     source: { silo: null, dryer: null, compound: null, special: null },
@@ -13,7 +19,7 @@ export const state = {
     // Which slot is currently being used for the label / edits.
     activeProductSlot: "primary",
     weights: { netLb: 0, grossLb: 0, tareLb: 0 },
-    unitNumber: 'AC1001001',
+    unitNumber: "AC1001001",
     bigCode: generateBigCode(),
     // Flag to indicate Coperion-specific flow/numbering
     isCoperion: false,
@@ -47,14 +53,13 @@ export const screens = {
 };
 
 export function showScreen(name) {
-    Object.values(screens).forEach((s) => s && s.classList.remove('active'));
+    Object.values(screens).forEach((s) => s && s.classList.remove("active"));
     const el = screens[name];
-    if (el) el.classList.add('active');
+    if (el) el.classList.add("active");
 }
 
-// Centralized per-context product persistence
-// Stored as a single localStorage JSON object: { "dryer:A": "BS640T", "compound:B": "PA6-205", ... }
-const SELECTED_PRODUCTS_MAP_KEY = 'selected_products_by_context_v1';
+// Legacy local keys retained only as a one-time migration fallback.
+const SELECTED_PRODUCTS_MAP_KEY = "selected_products_by_context_v1";
 const SELECTED_PRODUCT_SLOTS_MAP_KEY = "selected_product_slots_by_context_v1";
 
 export const BLANK_PRODUCT_LABEL = "BLANK";
@@ -91,14 +96,6 @@ function readSelectedProductsMap() {
     }
 }
 
-function writeSelectedProductsMap(map) {
-    try {
-        localStorage.setItem(SELECTED_PRODUCTS_MAP_KEY, JSON.stringify(map || {}));
-    } catch {
-        // ignore persistence errors
-    }
-}
-
 function readSelectedProductSlotsMap() {
     try {
         const raw = localStorage.getItem(SELECTED_PRODUCT_SLOTS_MAP_KEY);
@@ -108,26 +105,19 @@ function readSelectedProductSlotsMap() {
     }
 }
 
-function writeSelectedProductSlotsMap(map) {
-    try {
-        localStorage.setItem(
-            SELECTED_PRODUCT_SLOTS_MAP_KEY,
-            JSON.stringify(map || {})
-        );
-    } catch {
-        // ignore persistence errors
-    }
-}
-
 function makeContextKey(sourceGroup, sourceLetter) {
-    const group = String(sourceGroup || '').toLowerCase();
-    const letter = String(sourceLetter || '').toUpperCase();
+    const group = String(sourceGroup || "").toLowerCase();
+    const letter = String(sourceLetter || "").toUpperCase();
     if (!group || !letter) return null;
     return `${group}:${letter}`;
 }
 
 function getFlowPrefix() {
-    return state.isCoperion ? 'cop' : 'pr';
+    return state.isCoperion ? "cop" : "pr";
+}
+
+function getSharedProductFlow() {
+    return state.isCoperion ? "coperion" : "pr";
 }
 
 function makeNamespacedKey(baseKey) {
@@ -136,66 +126,185 @@ function makeNamespacedKey(baseKey) {
     return `${prefix}:${baseKey}`;
 }
 
+function readLegacyProductForContextKey(baseKey) {
+    const map = readSelectedProductsMap();
+    const namespacedKey = makeNamespacedKey(baseKey);
+    const preferred = namespacedKey ? map[namespacedKey] : undefined;
+    if (typeof preferred === "string" && preferred) return preferred;
+    const legacy = map[baseKey];
+    return typeof legacy === "string" && legacy ? legacy : null;
+}
+
+function readLegacyProductSlotsForContextKey(baseKey) {
+    const map = readSelectedProductSlotsMap();
+    const namespacedKey = makeNamespacedKey(baseKey);
+    const raw = namespacedKey ? map[namespacedKey] : undefined;
+    if (!raw || typeof raw !== "object") return null;
+    return {
+        primary: normalizeProductValue(raw.primary),
+        secondary: normalizeProductValue(raw.secondary),
+    };
+}
+
+function queueLegacySingleMigration(sourceGroup, sourceLetter, product) {
+    const normalized = normalizeProductValue(product);
+    if (!normalized) return;
+    void saveSharedProductSelection(
+        getSharedProductFlow(),
+        sourceGroup,
+        sourceLetter,
+        normalized,
+    ).catch((err) => {
+        console.warn("Failed to migrate legacy product selection", err);
+    });
+}
+
+function queueLegacySlotsMigration(sourceGroup, sourceLetter, slots) {
+    const normalizedSlots = {
+        primary: normalizeProductValue(slots && slots.primary),
+        secondary: normalizeProductValue(slots && slots.secondary),
+    };
+    if (!normalizedSlots.primary && !normalizedSlots.secondary) return;
+    void saveSharedProductSlots(
+        getSharedProductFlow(),
+        sourceGroup,
+        sourceLetter,
+        normalizedSlots,
+    ).catch((err) => {
+        console.warn("Failed to migrate legacy product slots", err);
+    });
+}
+
+export function getCurrentFlowDefaultProductCode() {
+    return getDefaultProductRecord(getSharedProductFlow())?.code || null;
+}
+
 export function loadProductForContext(sourceGroup, sourceLetter) {
     const baseKey = makeContextKey(sourceGroup, sourceLetter);
     if (!baseKey) return null;
-    const map = readSelectedProductsMap();
-    // Prefer namespaced (flow-specific) key first
-    const namespacedKey = makeNamespacedKey(baseKey);
-    const preferred = namespacedKey ? map[namespacedKey] : undefined;
-    if (typeof preferred === 'string' && preferred) return preferred;
-    // Fallback to legacy unprefixed key for backward compatibility
-    const legacy = map[baseKey];
-    return typeof legacy === 'string' && legacy ? legacy : null;
+
+    const shared = normalizeProductValue(
+        getProductCodesForContext(
+            getSharedProductFlow(),
+            sourceGroup,
+            sourceLetter,
+        ).primary,
+    );
+    if (shared) return shared;
+
+    const legacy = normalizeProductValue(readLegacyProductForContextKey(baseKey));
+    if (legacy) {
+        queueLegacySingleMigration(sourceGroup, sourceLetter, legacy);
+    }
+    return legacy;
 }
 
 export function saveProductForContext(sourceGroup, sourceLetter, product) {
     const baseKey = makeContextKey(sourceGroup, sourceLetter);
     if (!baseKey) return;
-    const map = readSelectedProductsMap();
-    const namespacedKey = makeNamespacedKey(baseKey);
-    if (product) {
-        if (namespacedKey) map[namespacedKey] = String(product);
-    } else {
-        if (namespacedKey) delete map[namespacedKey];
-    }
-    writeSelectedProductsMap(map);
+    void saveSharedProductSelection(
+        getSharedProductFlow(),
+        sourceGroup,
+        sourceLetter,
+        normalizeProductValue(product),
+    ).catch((err) => {
+        console.warn("Failed to save shared product selection", err);
+    });
 }
 
 export function loadProductSlotsForContext(sourceGroup, sourceLetter) {
     const baseKey = makeContextKey(sourceGroup, sourceLetter);
     if (!baseKey) return { primary: null, secondary: null };
-    const map = readSelectedProductSlotsMap();
-    const namespacedKey = makeNamespacedKey(baseKey);
-    const raw = namespacedKey ? map[namespacedKey] : undefined;
-    const fromSlotsMap =
-        raw && typeof raw === "object"
-            ? {
-                  primary: normalizeProductValue(raw.primary),
-                  secondary: normalizeProductValue(raw.secondary),
-              }
-            : null;
-    if (fromSlotsMap) return fromSlotsMap;
 
-    // Backward compatibility: if we only have a single persisted product, treat it as primary.
-    const legacySingle = loadProductForContext(sourceGroup, sourceLetter);
-    return { primary: normalizeProductValue(legacySingle), secondary: null };
+    const shared = getProductCodesForContext(
+        getSharedProductFlow(),
+        sourceGroup,
+        sourceLetter,
+    );
+    const normalizedShared = {
+        primary: normalizeProductValue(shared.primary),
+        secondary: normalizeProductValue(shared.secondary),
+    };
+    if (normalizedShared.primary || normalizedShared.secondary) {
+        return normalizedShared;
+    }
+
+    const legacySlots = readLegacyProductSlotsForContextKey(baseKey);
+    if (legacySlots && (legacySlots.primary || legacySlots.secondary)) {
+        queueLegacySlotsMigration(sourceGroup, sourceLetter, legacySlots);
+        return legacySlots;
+    }
+
+    const legacySingle = normalizeProductValue(
+        readLegacyProductForContextKey(baseKey),
+    );
+    if (legacySingle) {
+        queueLegacySingleMigration(sourceGroup, sourceLetter, legacySingle);
+    }
+    return { primary: legacySingle, secondary: null };
 }
 
 export function saveProductSlotsForContext(sourceGroup, sourceLetter, slots) {
     const baseKey = makeContextKey(sourceGroup, sourceLetter);
     if (!baseKey) return;
-    const map = readSelectedProductSlotsMap();
-    const namespacedKey = makeNamespacedKey(baseKey);
-    if (!namespacedKey) return;
-    const primary = normalizeProductValue(slots && slots.primary);
-    const secondary = normalizeProductValue(slots && slots.secondary);
-    if (!primary && !secondary) {
-        delete map[namespacedKey];
-    } else {
-        map[namespacedKey] = { primary, secondary };
+    void saveSharedProductSlots(
+        getSharedProductFlow(),
+        sourceGroup,
+        sourceLetter,
+        {
+            primary: normalizeProductValue(slots && slots.primary),
+            secondary: normalizeProductValue(slots && slots.secondary),
+        },
+    ).catch((err) => {
+        console.warn("Failed to save shared product slots", err);
+    });
+}
+
+export function syncActiveProductStateFromCurrentContext(options = {}) {
+    const persistDefault = Boolean(options.persistDefault);
+    const group = state.activeGroup;
+    const letter = group ? state.source[group] : null;
+    if (!group || !letter) return null;
+
+    const defaultCode = getCurrentFlowDefaultProductCode();
+    const usesTwoSlots = !state.isCoperion && isTwoSlotProductContext(group);
+
+    if (usesTwoSlots) {
+        const savedSlots = loadProductSlotsForContext(group, letter);
+        const normalizedSlots = {
+            primary: savedSlots.primary || defaultCode,
+            secondary: savedSlots.secondary || null,
+        };
+        state.productSlots = normalizedSlots;
+        if (state.activeProductSlot !== "secondary") {
+            state.activeProductSlot = "primary";
+        }
+        const active = getActiveProductFromSlots(
+            normalizedSlots,
+            state.activeProductSlot,
+        );
+        state.bigCode = active || "";
+        state.selectedProduct = active || null;
+        if (
+            persistDefault &&
+            (normalizedSlots.primary !== savedSlots.primary ||
+                normalizedSlots.secondary !== savedSlots.secondary)
+        ) {
+            saveProductSlotsForContext(group, letter, normalizedSlots);
+        }
+        return state.bigCode;
     }
-    writeSelectedProductSlotsMap(map);
+
+    const savedProduct = loadProductForContext(group, letter);
+    const product = savedProduct || defaultCode;
+    state.productSlots = { primary: product, secondary: null };
+    state.activeProductSlot = "primary";
+    state.selectedProduct = product || null;
+    state.bigCode = product || "";
+    if (persistDefault && product && product !== savedProduct) {
+        saveProductForContext(group, letter, product);
+    }
+    return state.bigCode;
 }
 
 export function getActiveProductFromSlots(slots, activeSlot) {

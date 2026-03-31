@@ -1,20 +1,23 @@
 import {
     state,
     showScreen,
-    loadProductForContext,
     saveProductForContext,
-    loadProductSlotsForContext,
     saveProductSlotsForContext,
     isTwoSlotProductContext,
     getActiveProductFromSlots,
     formatProductForDisplay,
     BLANK_PRODUCT_LABEL,
+    syncActiveProductStateFromCurrentContext,
 } from "../state.js";
 
 import {
-    PR_DEFAULT_PRODUCT,
-    PR_PRODUCT_CHOICES,
-} from "../catalog/product-choices.js";
+    getProductDescription,
+    getProductDisplayLabel,
+    getProductRecord,
+    getProductName,
+    getSelectableProductRecords,
+    updateProductRecord,
+} from "../product-sync.js";
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
     if (back) back.addEventListener("click", () => showScreen("source"));
@@ -73,6 +76,15 @@ export function initProductsStep() {
     const choicesEl = document.getElementById("prProductChoices");
     const inlineWrap = document.getElementById("productInlineChoicesWrap");
     const inlineChoicesEl = document.getElementById("productInlineChoices");
+    const detailsEl = document.getElementById("productDetails");
+    const editBtn = document.getElementById("btnPrEditProduct");
+    const editModal = document.getElementById("prEditModal");
+    const editCodeInput = document.getElementById("prEditCode");
+    const editNameInput = document.getElementById("prEditName");
+    const editDescriptionInput = document.getElementById("prEditDescription");
+    const editErrorEl = document.getElementById("prEditError");
+    const editCancelBtn = document.getElementById("prEditCancel");
+    const editSaveBtn = document.getElementById("prEditSave");
 
     // Per-context storage helpers are centralized in state.js
 
@@ -101,6 +113,7 @@ export function initProductsStep() {
                 : "Only one product is shown by default.";
         if (inlineWrap) inlineWrap.classList.toggle("hidden", !on);
         if (changeBtn) changeBtn.classList.toggle("hidden", on);
+        if (editBtn) editBtn.classList.toggle("hidden", on);
     }
 
     function ensureContextAndDefaultProduct() {
@@ -110,31 +123,100 @@ export function initProductsStep() {
         if (metaEl)
             metaEl.textContent =
                 group && letter ? `${group.toUpperCase()} ${letter}` : "";
-
-        if (isTwoSlotProductContext(group)) {
-            const savedSlots = loadProductSlotsForContext(group, letter);
-            const primary = savedSlots.primary || PR_DEFAULT_PRODUCT;
-            const secondary = savedSlots.secondary || null;
-            state.productSlots = { primary, secondary };
-            if (state.activeProductSlot !== "secondary")
-                state.activeProductSlot = "primary";
-            // Persist the normalized slots in case we migrated from legacy single value.
-            saveProductSlotsForContext(group, letter, state.productSlots);
-            syncBigCodeToActiveSlot();
-            return;
-        }
-
-        // Bulk / Silo remains single-slot.
-        const savedForContext = loadProductForContext(group, letter);
-        const product = savedForContext || PR_DEFAULT_PRODUCT;
-        state.productSlots = { primary: product, secondary: null };
-        state.activeProductSlot = "primary";
-        state.selectedProduct = product;
-        state.bigCode = product;
+        syncActiveProductStateFromCurrentContext({ persistDefault: true });
     }
 
     function setProceedEnabled(enabled) {
         if (proceed) proceed.disabled = !enabled;
+    }
+
+    function getPrChoiceRecords() {
+        return getSelectableProductRecords("pr");
+    }
+
+    function renderProductDetails() {
+        if (!detailsEl) return;
+        const activeCode = isTwoSlotProductContext(state.activeGroup)
+            ? getActiveProductFromSlots(state.productSlots, state.activeProductSlot)
+            : state.productSlots.primary;
+        if (!activeCode) {
+            detailsEl.classList.add("hidden");
+            detailsEl.textContent = "";
+            return;
+        }
+        const pieces = [getProductDisplayLabel("pr", activeCode)];
+        const name = getProductName("pr", activeCode);
+        const description = getProductDescription("pr", activeCode);
+        if (name && name !== activeCode) pieces.push(name);
+        if (description) pieces.push(description);
+        detailsEl.textContent = pieces.filter(Boolean).join(" - ");
+        detailsEl.classList.remove("hidden");
+    }
+
+    function closeEditModal() {
+        if (!editModal) return;
+        editModal.classList.add("hidden");
+        if (editErrorEl) editErrorEl.textContent = "";
+    }
+
+    function openEditModal() {
+        const activeCode = isTwoSlotProductContext(state.activeGroup)
+            ? getActiveProductFromSlots(state.productSlots, state.activeProductSlot)
+            : state.productSlots.primary;
+        const record = getProductRecord("pr", activeCode);
+        if (!record) {
+            if (productsErrorEl) {
+                productsErrorEl.textContent =
+                    "Select a product before editing its details";
+            }
+            return;
+        }
+        if (productsErrorEl) productsErrorEl.textContent = "";
+        if (editCodeInput) editCodeInput.value = record.code || "";
+        if (editNameInput) editNameInput.value = record.name || "";
+        if (editDescriptionInput) {
+            editDescriptionInput.value = record.description || "";
+        }
+        if (editErrorEl) editErrorEl.textContent = "";
+        if (editModal) editModal.classList.remove("hidden");
+        if (editCodeInput) editCodeInput.focus();
+    }
+
+    async function saveEditedProductRecord() {
+        const activeCode = isTwoSlotProductContext(state.activeGroup)
+            ? getActiveProductFromSlots(state.productSlots, state.activeProductSlot)
+            : state.productSlots.primary;
+        const record = getProductRecord("pr", activeCode);
+        if (!record) {
+            if (editErrorEl) editErrorEl.textContent = "Selected product not found";
+            return;
+        }
+        const code = String(editCodeInput?.value || "").trim();
+        const name = String(editNameInput?.value || "").trim();
+        const description = String(editDescriptionInput?.value || "").trim();
+        if (!code) {
+            if (editErrorEl) editErrorEl.textContent = "Enter a product code.";
+            return;
+        }
+        if (editSaveBtn) {
+            editSaveBtn.disabled = true;
+            editSaveBtn.textContent = "Saving...";
+        }
+        try {
+            await updateProductRecord("pr", record.id, { code, name, description });
+            closeEditModal();
+        } catch (err) {
+            console.warn("Failed to update product record", err);
+            if (editErrorEl) {
+                editErrorEl.textContent =
+                    "Unable to save product changes. Please try again.";
+            }
+        } finally {
+            if (editSaveBtn) {
+                editSaveBtn.disabled = false;
+                editSaveBtn.textContent = "Save";
+            }
+        }
     }
 
     function renderOneSlotProduct() {
@@ -143,7 +225,9 @@ export function initProductsStep() {
         listEl.innerHTML = "";
         const b = document.createElement("button");
         b.className = "btn product-btn selected";
-        b.textContent = state.productSlots.primary || PR_DEFAULT_PRODUCT;
+        b.textContent =
+            getProductDisplayLabel("pr", state.productSlots.primary) ||
+            formatProductForDisplay(state.productSlots.primary);
         listEl.appendChild(b);
         setProceedEnabled(!!state.productSlots.primary);
     }
@@ -163,12 +247,17 @@ export function initProductsStep() {
             btn.className = "btn product-btn" + (selected ? " selected" : "");
             btn.textContent = `${
                 isPrimary ? "Primary" : "Secondary"
-            }: ${formatProductForDisplay(value)}`;
+            }: ${
+                value
+                    ? getProductDisplayLabel("pr", value) ||
+                      formatProductForDisplay(value)
+                    : formatProductForDisplay(value)
+            }`;
             btn.addEventListener("click", () => {
                 if (productsErrorEl) productsErrorEl.textContent = "";
                 state.activeProductSlot = slot;
                 syncBigCodeToActiveSlot();
-                renderTwoSlotProducts();
+                renderProducts();
             });
             return btn;
         };
@@ -196,26 +285,40 @@ export function initProductsStep() {
                 : state.productSlots.secondary;
 
         const list = isTwoSlot
-            ? [BLANK_PRODUCT_LABEL, ...PR_PRODUCT_CHOICES]
-            : PR_PRODUCT_CHOICES.slice();
+            ? [
+                  { type: "blank", code: BLANK_PRODUCT_LABEL, label: BLANK_PRODUCT_LABEL },
+                  ...getPrChoiceRecords().map((record) => ({
+                      type: "product",
+                      code: record.code,
+                      label: getProductDisplayLabel("pr", record.code) || record.code,
+                  })),
+              ]
+            : getPrChoiceRecords().map((record) => ({
+                  type: "product",
+                  code: record.code,
+                  label: getProductDisplayLabel("pr", record.code) || record.code,
+              }));
 
-        list.forEach((prod) => {
+        list.forEach((entry) => {
             const btn = document.createElement("button");
-            const isBlank = String(prod).toUpperCase() === BLANK_PRODUCT_LABEL;
+            const isBlank =
+                entry.type === "blank" ||
+                String(entry.code).toUpperCase() === BLANK_PRODUCT_LABEL;
+            const nextValue = isBlank ? null : entry.code;
             const isSelected = isBlank
                 ? !current
-                : String(current || "") === String(prod);
+                : String(current || "") === String(nextValue);
             btn.className = "btn product-btn" + (isSelected ? " selected" : "");
-            btn.textContent = prod;
+            btn.textContent = entry.label;
             btn.addEventListener("click", () => {
                 if (productsErrorEl) productsErrorEl.textContent = "";
 
                 if (!isTwoSlot) {
-                    state.productSlots = { primary: prod, secondary: null };
+                    state.productSlots = { primary: nextValue, secondary: null };
                     state.activeProductSlot = "primary";
-                    state.selectedProduct = prod;
-                    state.bigCode = prod;
-                    saveProductForContext(group, letter, prod);
+                    state.selectedProduct = nextValue;
+                    state.bigCode = nextValue || "";
+                    saveProductForContext(group, letter, nextValue);
                     renderProducts();
                     return;
                 }
@@ -228,9 +331,9 @@ export function initProductsStep() {
                 }
 
                 if (activeSlot === "primary") {
-                    state.productSlots.primary = isBlank ? null : prod;
+                    state.productSlots.primary = nextValue;
                 } else {
-                    state.productSlots.secondary = isBlank ? null : prod;
+                    state.productSlots.secondary = nextValue;
                 }
                 saveProductSlotsForContext(group, letter, state.productSlots);
                 syncBigCodeToActiveSlot();
@@ -249,6 +352,7 @@ export function initProductsStep() {
         else renderOneSlotProduct();
 
         if (inline) renderInlineChoices();
+        renderProductDetails();
     }
 
     function openModal() {
@@ -281,17 +385,31 @@ export function initProductsStep() {
                 ? state.productSlots.primary
                 : state.productSlots.secondary;
         const list = isTwoSlotProductContext(state.activeGroup)
-            ? [BLANK_PRODUCT_LABEL, ...PR_PRODUCT_CHOICES]
-            : PR_PRODUCT_CHOICES.slice();
+            ? [
+                  { type: "blank", code: BLANK_PRODUCT_LABEL, label: BLANK_PRODUCT_LABEL },
+                  ...getPrChoiceRecords().map((record) => ({
+                      type: "product",
+                      code: record.code,
+                      label: getProductDisplayLabel("pr", record.code) || record.code,
+                  })),
+              ]
+            : getPrChoiceRecords().map((record) => ({
+                  type: "product",
+                  code: record.code,
+                  label: getProductDisplayLabel("pr", record.code) || record.code,
+              }));
 
-        list.forEach((prod) => {
+        list.forEach((entry) => {
             const btn = document.createElement("button");
-            const isBlank = String(prod).toUpperCase() === BLANK_PRODUCT_LABEL;
+            const isBlank =
+                entry.type === "blank" ||
+                String(entry.code).toUpperCase() === BLANK_PRODUCT_LABEL;
+            const nextValue = isBlank ? null : entry.code;
             const isSelected = isBlank
                 ? !current
-                : String(current || "") === String(prod);
+                : String(current || "") === String(nextValue);
             btn.className = "btn product-btn" + (isSelected ? " selected" : "");
-            btn.textContent = prod;
+            btn.textContent = entry.label;
             btn.addEventListener("click", () => {
                 choicesEl
                     .querySelectorAll(".btn")
@@ -300,11 +418,11 @@ export function initProductsStep() {
                 const group = state.activeGroup;
                 const letter = group ? state.source[group] : null;
                 if (!isTwoSlotProductContext(group)) {
-                    state.productSlots = { primary: prod, secondary: null };
+                    state.productSlots = { primary: nextValue, secondary: null };
                     state.activeProductSlot = "primary";
-                    state.selectedProduct = prod;
-                    state.bigCode = prod;
-                    saveProductForContext(group, letter, prod);
+                    state.selectedProduct = nextValue;
+                    state.bigCode = nextValue || "";
+                    saveProductForContext(group, letter, nextValue);
                     return;
                 }
 
@@ -318,9 +436,9 @@ export function initProductsStep() {
                 }
 
                 if (activeSlot === "primary") {
-                    state.productSlots.primary = isBlank ? null : prod;
+                    state.productSlots.primary = nextValue;
                 } else {
-                    state.productSlots.secondary = isBlank ? null : prod;
+                    state.productSlots.secondary = nextValue;
                 }
                 saveProductSlotsForContext(group, letter, state.productSlots);
                 syncBigCodeToActiveSlot();
@@ -330,9 +448,16 @@ export function initProductsStep() {
     }
 
     if (changeBtn) changeBtn.addEventListener("click", () => openModal());
+    if (editBtn) editBtn.addEventListener("click", () => openEditModal());
     if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal());
     if (cancelProductsBtn)
         cancelProductsBtn.addEventListener("click", () => closeModal());
+    if (editCancelBtn)
+        editCancelBtn.addEventListener("click", () => closeEditModal());
+    if (editSaveBtn)
+        editSaveBtn.addEventListener("click", () => {
+            void saveEditedProductRecord();
+        });
     if (unlockBtn)
         unlockBtn.addEventListener("click", () => {
             const val = (pwdInput && String(pwdInput.value || "").trim()) || "";
@@ -359,6 +484,20 @@ export function initProductsStep() {
         });
 
     document.addEventListener("renderProductList", () => {
+        ensureContextAndDefaultProduct();
+        renderProducts();
+    });
+    document.addEventListener("productCatalogSync", () => {
+        if (state.isCoperion || !state.activeGroup) return;
+        ensureContextAndDefaultProduct();
+        renderProducts();
+        if (modal && !modal.classList.contains("hidden") && stageChoices) {
+            const showingChoices = !stageChoices.classList.contains("hidden");
+            if (showingChoices) showChoices();
+        }
+    });
+    document.addEventListener("productSelectionSync", () => {
+        if (state.isCoperion || !state.activeGroup) return;
         ensureContextAndDefaultProduct();
         renderProducts();
     });
