@@ -3,10 +3,14 @@
         <h1>Extrusion</h1>
     </header>
     <div class="muted-text">Only one product is shown by default</div>
+    <div id="coperionProductDetails" class="muted-text hidden"></div>
     <div id="coperionProductContainer" class="product-list"></div>
     <footer class="screen-footer">
         <button id="btnLogoutCoperion" class="btn tertiary">Log out</button>
         <div class="spacer"></div>
+        <button id="btnEditProductCoperion" class="btn tertiary">
+            Edit selected product
+        </button>
         <button id="btnChangeProducts" class="btn tertiary">
             Change products
         </button>
@@ -53,6 +57,39 @@
                     <div class="spacer"></div>
                     <button id="coperionDone" class="btn primary">Done</button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div id="coperionEditModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Edit selected product</h3>
+            <div class="form" style="margin-top: 12px">
+                <label>
+                    Product code
+                    <input id="coperionEditCode" type="text" />
+                </label>
+                <label>
+                    Product name
+                    <input id="coperionEditName" type="text" />
+                </label>
+                <label>
+                    Description
+                    <input id="coperionEditDescription" type="text" />
+                </label>
+            </div>
+            <div
+                id="coperionEditError"
+                class="form-error"
+                role="alert"
+                aria-live="polite"
+                style="margin-top: 12px"
+            ></div>
+            <div class="row" style="margin-top: 12px">
+                <button id="coperionEditCancel" class="btn secondary">
+                    Cancel
+                </button>
+                <div class="spacer"></div>
+                <button id="coperionEditSave" class="btn primary">Save</button>
             </div>
         </div>
     </div>
