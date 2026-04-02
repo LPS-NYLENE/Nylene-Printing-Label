@@ -32,7 +32,7 @@ export function parseSourceFromPrefix(prefix) {
 
 export function buildUnitNumberFromParts({ prefix, year, day, box }) {
     const src = normalizeUnitNumber(prefix).slice(0, 2);
-    if (!parseSourceFromPrefix(src)) {
+    if (src !== "EA" && !parseSourceFromPrefix(src)) {
         return { ok: false, error: "Select a valid source prefix." };
     }
 
