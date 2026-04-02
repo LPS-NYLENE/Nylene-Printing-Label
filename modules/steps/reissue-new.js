@@ -89,6 +89,12 @@ export function initReissueNewFlow() {
     const clearBtn = document.getElementById("reissueNewClear");
     const manualBtn = document.getElementById("reissueNewManualEntry");
     const searchBtn = document.getElementById("reissueNewSearch");
+    const sourceOptions = srcInput
+        ? Array.from(srcInput.options).map((option) => ({
+              value: option.value,
+              label: option.textContent || "",
+          }))
+        : [];
 
     if (!buttons.length || !modal) return;
 
@@ -98,12 +104,31 @@ export function initReissueNewFlow() {
         if (errEl) errEl.textContent = msg;
     };
 
-    function openModal() {
+    function setSourceOptions(coperionOnly = false) {
+        if (!srcInput) return;
+        const allowedValues = coperionOnly
+            ? new Set([COPERION_PREFIX])
+            : null;
+        srcInput.replaceChildren();
+        sourceOptions
+            .filter((option) =>
+                allowedValues ? allowedValues.has(option.value) : true,
+            )
+            .forEach((option) => {
+                const el = document.createElement("option");
+                el.value = option.value;
+                el.textContent = option.label;
+                srcInput.appendChild(el);
+            });
+        srcInput.value = coperionOnly ? COPERION_PREFIX : "";
+    }
+
+    function openModal(coperionOnly = false) {
         resetReissueNewState();
         setError("");
         show();
         if (srcInput) {
-            srcInput.value = "";
+            setSourceOptions(coperionOnly);
             srcInput.focus();
         }
         if (yearInput) yearInput.value = "";
@@ -222,7 +247,9 @@ export function initReissueNewFlow() {
     }
 
     buttons.forEach((btn) => {
-        btn.addEventListener("click", () => openModal());
+        btn.addEventListener("click", () =>
+            openModal(btn.id === "btnReissueNewCoperion"),
+        );
     });
     if (clearBtn)
         clearBtn.addEventListener("click", () => {
