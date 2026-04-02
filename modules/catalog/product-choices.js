@@ -14,7 +14,7 @@ function dedupeStable(list) {
     return out;
 }
 
-// Default fallback when no prior selection exists for a context.
+// Default fallback when no prior selection exists for a context
 export const PR_DEFAULT_PRODUCT = "BLANK";
 
 // Allowed products for P&R (from provided list)
