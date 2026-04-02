@@ -3,6 +3,11 @@ import {
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
+import {
+    applyToronto0001Rule,
+    getTorontoDayOfYear,
+    getTorontoParts,
+} from "./toronto-time.js";
 
 export function generateUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
@@ -12,19 +17,19 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     const seq = getNextDailySequence(effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const yearDigit = String(getTorontoParts(effective).year).slice(-1);
     return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
 }
 
 // Async variant: compute the next unit number by reading existing prints
 // for today from Firebase Realtime Database instead of localStorage.
-// Resets to 001 at the start of a new UTC day (consistent with saved logs).
+// Resets to 001 at the start of a new Ontario Eastern day.
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
     const now = new Date();
     const effective = apply1201Rule(now);
     const doy = getDayOfYear(effective);
     const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const yearDigit = String(getTorontoParts(effective).year).slice(-1);
 
     const seq = await getNextDailySequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
@@ -39,7 +44,7 @@ export async function generateCoperionUnitNumberFromFirebase() {
     const effective = apply1201Rule(now);
     const doy = getDayOfYear(effective);
     const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const yearDigit = String(getTorontoParts(effective).year).slice(-1);
     const seq = await getNextCoperionSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     return `EA1${yearDigit}${doyStr}${seqStr}`;
@@ -57,7 +62,7 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const effective = apply1201Rule(now);
     const doy = getDayOfYear(effective);
     const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const yearDigit = String(getTorontoParts(effective).year).slice(-1);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
@@ -65,16 +70,13 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
 }
 
 function getDayOfYear(date) {
-    const start = new Date(date.getFullYear(), 0, 1);
-    const diffMs = date - start;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    return Math.floor(diffMs / oneDayMs) + 1;
+    return getTorontoDayOfYear(date);
 }
 
 const SEQ_STORE_KEY = "unit_seq_store_v1";
 function getNextDailySequence(date) {
     try {
-        const y = date.getFullYear();
+        const y = getTorontoParts(date).year;
         const doy = getDayOfYear(date);
         const key = `${y}-${doy}`;
         const raw = localStorage.getItem(SEQ_STORE_KEY);
@@ -88,7 +90,7 @@ function getNextDailySequence(date) {
 }
 function getAndIncrementDailySequence(date) {
     try {
-        const y = date.getFullYear();
+        const y = getTorontoParts(date).year;
         const doy = getDayOfYear(date);
         const key = `${y}-${doy}`;
         const raw = localStorage.getItem(SEQ_STORE_KEY);
@@ -111,13 +113,7 @@ function getAndIncrementDailySequence(date) {
 
 // For times between 00:00 and 00:01 inclusive, treat as previous day
 function apply1201Rule(date) {
-    const d = new Date(date);
-    const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        // subtract one minute to go to previous day window
-        d.setMinutes(d.getMinutes() - 1);
-    }
-    return d;
+    return applyToronto0001Rule(date);
 }
 
 // Commit the currently displayed unit number by incrementing the stored daily sequence.
@@ -130,7 +126,7 @@ export function commitPrintedUnitNumber(sourceGroup, sourceLetter) {
     const seq = getAndIncrementDailySequence(effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const yearDigit = String(getTorontoParts(effective).year).slice(-1);
     return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
 }
 

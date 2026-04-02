@@ -22,6 +22,13 @@ import {
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
 } from "./utils/daily-sequence.js";
+import {
+    applyToronto0001Rule,
+    formatTorontoDayKey,
+    getTorontoDayOfYear,
+    getTorontoDayWindow,
+    getTorontoParts,
+} from "./utils/toronto-time.js";
 
 // const firebaseConfig = {
 //     apiKey: "AIzaSyAcNqa-rlwixUAsS7hTGsXaqiC8ELMVJXw",
@@ -121,15 +128,15 @@ export async function savePrintToFirebase(record) {
     try {
         const db = getDatabaseInstance();
 
-        // Use LOCAL day key (YYYY-MM-DD) so Firebase buckets match the operator's "today".
-        // Note: timestamp remains ISO/UTC; only the bucket key is localized.
+        // Use the Ontario Eastern day key (YYYY-MM-DD) so Firebase buckets match
+        // label numbering regardless of the device timezone.
         const iso =
             record && record.timestamp
                 ? record.timestamp
                 : new Date().toISOString();
         const when = parseIsoDateOrNow(iso);
-        const effective = apply0001Rule(when);
-        const day = formatLocalDayKey(effective); // YYYY-MM-DD (local)
+        const effective = applyToronto0001Rule(when);
+        const day = formatTorontoDayKey(effective);
         const printsRef = ref(db, `prints/${day}`);
 
         const payload = {
@@ -174,35 +181,27 @@ export async function fetchAllPrintsFromFirebase() {
 
 // Compute the next daily sequence (last three digits) for a given date
 // by inspecting existing prints for that day in Realtime Database.
-// Buckets were historically stored under UTC day keys; we now store under local
-// day keys. For backward compatibility, we read both local and UTC buckets.
+// Buckets were historically stored under UTC day keys; we now store under
+// Ontario Eastern day keys. For backward compatibility, we read both.
 // Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
-    // Apply the app's 00:01 rule: 00:00-00:01 belongs to previous day
-    const effective = new Date(input);
-    const minutesSinceMidnight =
-        effective.getHours() * 60 + effective.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        effective.setMinutes(effective.getMinutes() - 1);
-    }
-    // Local day boundaries
-    const start = new Date(effective);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    // Apply the app's 00:01 rule in Ontario Eastern Time.
+    const effective = applyToronto0001Rule(input);
+    const { start, end } = getTorontoDayWindow(effective);
 
     // Build the Coperion EA prefix for this day so we can exclude it from P&R sequence
-    const yearDigit = String(effective.getFullYear()).slice(-1);
-    const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
+    const toronto = getTorontoParts(effective);
+    const yearDigit = String(toronto.year).slice(-1);
+    const doyStr = String(getTorontoDayOfYear(effective)).padStart(3, "0");
     const coperionPrefixForDay = `EA1${yearDigit}${doyStr}`;
 
     // Determine which buckets to read:
-    // - local day key (new writes)
-    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    // - Ontario Eastern day key (new writes)
+    // - UTC day keys spanning this Toronto day (legacy writes / timezone edge)
     const dayKeys = new Set();
-    const localKey = formatLocalDayKey(start);
+    const localKey = formatTorontoDayKey(start);
     const startUtcKey = start.toISOString().slice(0, 10);
     const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
     dayKeys.add(localKey);
@@ -215,14 +214,6 @@ export async function getNextDailySequenceFromFirebase(date) {
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
 }
 
-// Helper: day-of-year (1..365/366)
-function getDayOfYear(date) {
-    const start = new Date(date.getFullYear(), 0, 1);
-    const diffMs = date - start;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    return Math.floor(diffMs / oneDayMs) + 1;
-}
-
 // Compute the next Coperion daily sequence (last three digits) for the given date.
 // Rules:
 // - Prefix for Coperion: EA + 1 + last-digit-of-year + day-of-year (DDD)
@@ -233,30 +224,21 @@ export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
 
-    // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-    const effective = new Date(input);
-    const minutesSinceMidnight =
-        effective.getHours() * 60 + effective.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        effective.setMinutes(effective.getMinutes() - 1);
-    }
-
-    // Local day boundaries
-    const start = new Date(effective);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    // Apply the 00:01 rule in Ontario Eastern Time.
+    const effective = applyToronto0001Rule(input);
+    const { start, end } = getTorontoDayWindow(effective);
 
     // Build the EA prefix for the day: EA1[Y][DDD]
-    const yearDigit = String(effective.getFullYear()).slice(-1);
-    const doyStr = String(getDayOfYear(effective)).padStart(3, "0");
+    const toronto = getTorontoParts(effective);
+    const yearDigit = String(toronto.year).slice(-1);
+    const doyStr = String(getTorontoDayOfYear(effective)).padStart(3, "0");
     const prefix = `EA1${yearDigit}${doyStr}`;
 
     // Determine which buckets to read:
-    // - local day key (new writes)
-    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    // - Ontario Eastern day key (new writes)
+    // - UTC day keys spanning this Toronto day (legacy writes / timezone edge)
     const dayKeys = new Set();
-    const localKey = formatLocalDayKey(start);
+    const localKey = formatTorontoDayKey(start);
     const startUtcKey = start.toISOString().slice(0, 10);
     const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
     dayKeys.add(localKey);
@@ -279,25 +261,15 @@ export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const input = date instanceof Date ? date : new Date(date || Date.now());
 
-    // Apply 00:01 rule: 00:00-00:01 belongs to previous day
-    const effective = new Date(input);
-    const minutesSinceMidnight =
-        effective.getHours() * 60 + effective.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        effective.setMinutes(effective.getMinutes() - 1);
-    }
-
-    // Local day boundaries
-    const start = new Date(effective);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
+    // Apply the 00:01 rule in Ontario Eastern Time.
+    const effective = applyToronto0001Rule(input);
+    const { start, end } = getTorontoDayWindow(effective);
 
     // Determine which buckets to read:
-    // - local day key (new writes)
-    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    // - Ontario Eastern day key (new writes)
+    // - UTC day keys spanning this Toronto day (legacy writes / timezone edge)
     const dayKeys = new Set();
-    const localKey = formatLocalDayKey(start);
+    const localKey = formatTorontoDayKey(start);
     const startUtcKey = start.toISOString().slice(0, 10);
     const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
     dayKeys.add(localKey);
@@ -313,25 +285,6 @@ export async function getNextCompoundBagsSequenceFromFirebase(date) {
 function parseIsoDateOrNow(value) {
     const d = new Date(value);
     return Number.isFinite(d.getTime()) ? d : new Date();
-}
-
-// For times between 00:00 and 00:01 (exclusive), treat as previous day.
-// Matches the "00:01 rule" used in unit number generation.
-function apply0001Rule(date) {
-    const d = new Date(date);
-    const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        d.setMinutes(d.getMinutes() - 1);
-    }
-    return d;
-}
-
-function formatLocalDayKey(date) {
-    const d = new Date(date);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
 }
 
 function collectRecordsWithinWindow(snaps, start, end) {
