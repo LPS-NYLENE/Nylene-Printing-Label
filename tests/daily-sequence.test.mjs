@@ -89,3 +89,38 @@ test("Compound bags sequence ignores RI labels before the first regular box of t
 
     assert.equal(next, 201);
 });
+
+test("P&R sequence ignores same-day Coperion prefixes when computing the next suffix", () => {
+    const next = getNextPrSequenceFromRecords(
+        [
+            {
+                unitNumber: "AS16092017",
+                reissueFlag: "",
+                productLine: "P&R",
+            },
+            {
+                unitNumber: "EA16092417",
+                reissueFlag: "",
+                productLine: "Coperion",
+            },
+        ],
+        { coperionPrefixForDay: "EA16092" },
+    );
+
+    assert.equal(next, 18);
+});
+
+test("Coperion sequence restarts at 401 for a new day prefix", () => {
+    const next = getNextCoperionSequenceFromRecords(
+        [
+            {
+                unitNumber: "EA16091417",
+                reissueFlag: "",
+                productLine: "Coperion",
+            },
+        ],
+        { prefix: "EA16092" },
+    );
+
+    assert.equal(next, 401);
+});

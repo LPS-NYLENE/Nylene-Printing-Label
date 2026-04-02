@@ -4,6 +4,7 @@ import {
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
+import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
 import {
     confirmYesNo,
@@ -335,7 +336,8 @@ export function initPreviewStep() {
         // Include flow + bag-ness so we refresh when toggling between products.
         const isBags = isCompoundBagsContext(group, product);
         const flow = state.isCoperion ? "cop" : "pr";
-        return `${flow}:${group}:${letter}:${isBags ? "bags" : "std"}:${product}`;
+        const labelDay = formatLocalDayKey(new Date());
+        return `${flow}:${group}:${letter}:${isBags ? "bags" : "std"}:${product}:${labelDay}`;
     }
 
     async function refreshUnitNumberIfNeeded(force = false) {
