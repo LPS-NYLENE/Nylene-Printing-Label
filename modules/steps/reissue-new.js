@@ -13,6 +13,7 @@ import {
 
 const REISSUE_FLAG = "RI";
 const PASSWORD_EXPECTED = "Nylene2026!";
+const COPERION_PREFIX = "EA";
 
 function setFromRecord(record) {
     const unit = normalizeUnitNumber(record && record.unitNumber);
@@ -56,8 +57,29 @@ function resetReissueNewState() {
     state.lockUnitNumberOnce = false;
 }
 
+function hoistSharedModals() {
+    const appRoot = document.getElementById("app");
+    if (!appRoot) return;
+    [
+        "reissueSearchModal",
+        "reissueEditModal",
+        "reissueNewModal",
+        "operatorPasswordModal",
+        "operatorLotModal",
+        "operatorConfirmModal",
+    ].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el || el.parentElement === appRoot) return;
+        appRoot.appendChild(el);
+    });
+}
+
 export function initReissueNewFlow() {
-    const btn = document.getElementById("btnReissueNew");
+    hoistSharedModals();
+    const buttons = [
+        document.getElementById("btnReissueNew"),
+        document.getElementById("btnReissueNewCoperion"),
+    ].filter(Boolean);
     const modal = document.getElementById("reissueNewModal");
     const srcInput = document.getElementById("reissueNewSource");
     const yearInput = document.getElementById("reissueNewYear");
@@ -68,7 +90,7 @@ export function initReissueNewFlow() {
     const manualBtn = document.getElementById("reissueNewManualEntry");
     const searchBtn = document.getElementById("reissueNewSearch");
 
-    if (!btn || !modal) return;
+    if (!buttons.length || !modal) return;
 
     const show = () => modal.classList.remove("hidden");
     const hide = () => modal.classList.add("hidden");
@@ -95,7 +117,15 @@ export function initReissueNewFlow() {
     }
 
     function applyPrefixContext(prefix) {
-        const parsed = parseSourceFromPrefix(prefix);
+        const normalizedPrefix = normalizeUnitNumber(prefix).slice(0, 2);
+        if (normalizedPrefix === COPERION_PREFIX) {
+            state.isCoperion = true;
+            state.activeGroup = "compound";
+            state.source.compound = "A";
+            state.source.special = null;
+            return true;
+        }
+        const parsed = parseSourceFromPrefix(normalizedPrefix);
         if (!parsed) return false;
         state.isCoperion = false;
         state.activeGroup = parsed.group;
@@ -120,6 +150,11 @@ export function initReissueNewFlow() {
         state.lastPrinted = null;
 
         closeModal();
+        if (state.isCoperion) {
+            showScreen("coperion");
+            document.dispatchEvent(new CustomEvent("enterCoperion"));
+            return;
+        }
         showScreen("products");
         document.dispatchEvent(new CustomEvent("renderProductList"));
     }
@@ -186,7 +221,9 @@ export function initReissueNewFlow() {
         await handleUnitAttempt(lot);
     }
 
-    btn.addEventListener("click", () => openModal());
+    buttons.forEach((btn) => {
+        btn.addEventListener("click", () => openModal());
+    });
     if (clearBtn)
         clearBtn.addEventListener("click", () => {
             closeModal();

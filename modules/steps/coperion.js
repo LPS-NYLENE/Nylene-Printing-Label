@@ -123,6 +123,14 @@ export function initCoperionStep() {
 
     // Ensure base selection and numbering context when entering Coperion
     async function prepareCoperionContext() {
+        const preserveCurrentUnit =
+            state.isCoperion &&
+            state.reissueFlowType === "new" &&
+            state.lockUnitNumberOnce &&
+            String(state.unitNumber || "")
+                .trim()
+                .toUpperCase()
+                .startsWith("EA1");
         state.activeGroup = "compound";
         state.source.compound = "A"; // default mapping for Coperion
         state.isCoperion = true;
@@ -146,6 +154,10 @@ export function initCoperionStep() {
             clearLegacyProductSelection(context);
         }
         subscribeForCurrentContext();
+        if (preserveCurrentUnit) {
+            document.dispatchEvent(new CustomEvent("updatePreview"));
+            return;
+        }
         // Refresh the unit number from Firebase using Coperion-specific numbering
         (async () => {
             try {
