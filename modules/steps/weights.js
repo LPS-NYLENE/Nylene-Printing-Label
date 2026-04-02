@@ -34,6 +34,14 @@ export function initWeightsStep() {
         }
     }
 
+    function getNegativeTareError() {
+        if (!inputNet || !inputGross) return "";
+        const netRaw = String(inputNet.value ?? "").trim();
+        const grossRaw = String(inputGross.value ?? "").trim();
+        if (!netRaw || !grossRaw) return "";
+        return state.weights.tareLb < 0 ? "Tare weight cannot be negative" : "";
+    }
+
     function setWeightsError(message = "") {
         if (weightsError) weightsError.textContent = message;
     }
@@ -58,13 +66,18 @@ export function initWeightsStep() {
 
     function handleWeightInput() {
         syncWeightsFromInputs();
+        const tareError = getNegativeTareError();
+        if (tareError) {
+            setWeightsError(tareError);
+            return;
+        }
         if (allWeightInputsFilled()) {
             clearWeightsError();
         }
     }
 
     function prefillDefaultWeights() {
-        if (inputNet) inputNet.value = "1800";
+        if (inputNet) inputNet.value = "";
         if (inputGross) inputGross.value = "";
         if (inputTare) inputTare.value = "";
         handleWeightInput();
@@ -136,8 +149,14 @@ export function initWeightsStep() {
                 if (missingField.el) missingField.el.focus();
                 return;
             }
-            clearWeightsError();
             syncWeightsFromInputs();
+            const tareError = getNegativeTareError();
+            if (tareError) {
+                setWeightsError(tareError);
+                if (inputGross) inputGross.focus();
+                return;
+            }
+            clearWeightsError();
             document.dispatchEvent(new CustomEvent("updatePreview"));
             showScreen("preview");
         });

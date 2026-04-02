@@ -157,6 +157,11 @@ export function initReissueFlow() {
         }
     }
 
+    function getNegativeTareError(net, gross) {
+        const tare = +(gross - net).toFixed(1);
+        return tare < 0 ? "Tare weight cannot be negative" : "";
+    }
+
     async function handleSearch() {
         const input = normalizeUnit(searchInput?.value || "");
         if (!input) {
@@ -201,8 +206,9 @@ export function initReissueFlow() {
         }
         const net = parseNumber(netRaw);
         const gross = parseNumber(grossRaw);
-        if (gross < net) {
-            setEditError("Gross weight must be greater than net weight.");
+        const tareError = getNegativeTareError(net, gross);
+        if (tareError) {
+            setEditError(tareError);
             return;
         }
 
