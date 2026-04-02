@@ -9,7 +9,10 @@ import {
 const REISSUE_FLAG = "RI";
 
 export function initReissueFlow() {
-    const reissueBtn = document.getElementById("btnReissue");
+    const reissueButtons = [
+        document.getElementById("btnReissue"),
+        document.getElementById("btnReissueCoperion"),
+    ].filter(Boolean);
     const searchModal = document.getElementById("reissueSearchModal");
     const searchInput = document.getElementById("reissueBoxSearch");
     const searchBtn = document.getElementById("reissueSearchBtn");
@@ -28,7 +31,7 @@ export function initReissueFlow() {
     const confirmEditBtn = document.getElementById("reissueConfirm");
     const cancelEditBtn = document.getElementById("reissueCancelEdit");
 
-    if (!reissueBtn) return;
+    if (!reissueButtons.length) return;
 
     let activeRecord = null;
 
@@ -243,8 +246,10 @@ export function initReissueFlow() {
         showScreen("preview");
     }
 
-    reissueBtn.addEventListener("click", () => {
-        openSearchModal();
+    reissueButtons.forEach((reissueBtn) => {
+        reissueBtn.addEventListener("click", () => {
+            openSearchModal();
+        });
     });
 
     if (cancelSearchBtn)

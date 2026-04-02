@@ -140,9 +140,12 @@ export function initSourceStep() {
             }
         });
 
-    // Reprint last printed label
-    const reprintBtn = document.getElementById("btnReprint");
-    if (reprintBtn)
+    // Reprint last printed label from either the P&R or Coperion screen.
+    const reprintButtons = [
+        document.getElementById("btnReprint"),
+        document.getElementById("btnReprintCoperion"),
+    ].filter(Boolean);
+    reprintButtons.forEach((reprintBtn) => {
         reprintBtn.addEventListener("click", () => {
             let snap = state.lastPrinted;
             if (!snap) {
@@ -195,6 +198,7 @@ export function initSourceStep() {
             window.addEventListener("afterprint", restore, { once: true });
             window.print();
         });
+    });
 
     initReissueFlow();
     initReissueNewFlow();
