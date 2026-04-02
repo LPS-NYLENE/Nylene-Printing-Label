@@ -6,6 +6,10 @@ import {
     parseSourceFromPrefix,
     normalizeUnitNumber,
 } from "../modules/utils/unit-number.js";
+import {
+    getDayOfYear,
+    getLabelDayContext,
+} from "../modules/utils/label-rollover.js";
 
 test("parseSourceFromPrefix maps AD to dryer A", () => {
     assert.deepEqual(parseSourceFromPrefix("ad"), { group: "dryer", letter: "A" });
@@ -38,5 +42,19 @@ test("buildUnitNumberFromParts rejects invalid day", () => {
         box: "003",
     });
     assert.equal(res.ok, false);
+});
+
+test("getDayOfYear advances correctly after spring DST change", () => {
+    const justAfterMidnight = new Date("2026-04-02T00:11:00-04:00");
+
+    assert.equal(getDayOfYear(justAfterMidnight), 92);
+});
+
+test("getLabelDayContext rolls over immediately at local midnight", () => {
+    const context = getLabelDayContext(new Date("2026-04-02T00:00:00-04:00"));
+
+    assert.equal(context.dayOfYear, 92);
+    assert.equal(context.dayOfYearStr, "092");
+    assert.equal(context.localDayKey, "2026-04-02");
 });
 

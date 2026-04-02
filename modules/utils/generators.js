@@ -3,17 +3,15 @@ import {
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
+import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
 export function generateUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
-    const effective = apply1201Rule(now);
-    const doy = getDayOfYear(effective);
-    const doyStr = String(doy).padStart(3, "0");
-    const seq = getNextDailySequence(effective);
+    const dayContext = getLabelDayContext(now);
+    const seq = getNextDailySequence(dayContext.effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    const yearDigit = String(effective.getFullYear()).slice(-1);
-    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
+    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Async variant: compute the next unit number by reading existing prints
@@ -21,28 +19,21 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
 // Resets to 001 at the start of a new UTC day (consistent with saved logs).
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
     const now = new Date();
-    const effective = apply1201Rule(now);
-    const doy = getDayOfYear(effective);
-    const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
-
+    const dayContext = getLabelDayContext(now);
     const seq = await getNextDailySequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
+    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Explicit Coperion generator, to be used only for Coperion flow/screens.
 // Format: EA + 1 + last digit of year + day-of-year (001–365/366) + suffix starting at 401
 export async function generateCoperionUnitNumberFromFirebase() {
     const now = new Date();
-    const effective = apply1201Rule(now);
-    const doy = getDayOfYear(effective);
-    const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const dayContext = getLabelDayContext(now);
     const seq = await getNextCoperionSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
-    return `EA1${yearDigit}${doyStr}${seqStr}`;
+    return `EA1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Explicit Compound+BAGS generator, used only when:
@@ -54,21 +45,11 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceLetter
 ) {
     const now = new Date();
-    const effective = apply1201Rule(now);
-    const doy = getDayOfYear(effective);
-    const doyStr = String(doy).padStart(3, "0");
-    const yearDigit = String(effective.getFullYear()).slice(-1);
+    const dayContext = getLabelDayContext(now);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
-}
-
-function getDayOfYear(date) {
-    const start = new Date(date.getFullYear(), 0, 1);
-    const diffMs = date - start;
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    return Math.floor(diffMs / oneDayMs) + 1;
+    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 const SEQ_STORE_KEY = "unit_seq_store_v1";
@@ -109,29 +90,15 @@ function getAndIncrementDailySequence(date) {
     }
 }
 
-// For times between 00:00 and 00:01 inclusive, treat as previous day
-function apply1201Rule(date) {
-    const d = new Date(date);
-    const minutesSinceMidnight = d.getHours() * 60 + d.getMinutes();
-    if (minutesSinceMidnight < 1) {
-        // subtract one minute to go to previous day window
-        d.setMinutes(d.getMinutes() - 1);
-    }
-    return d;
-}
-
 // Commit the currently displayed unit number by incrementing the stored daily sequence.
 // Returns the committed unit number string that was just reserved/printed.
 export function commitPrintedUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
-    const effective = apply1201Rule(now);
-    const doy = getDayOfYear(effective);
-    const doyStr = String(doy).padStart(3, "0");
-    const seq = getAndIncrementDailySequence(effective);
+    const dayContext = getLabelDayContext(now);
+    const seq = getAndIncrementDailySequence(dayContext.effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    const yearDigit = String(effective.getFullYear()).slice(-1);
-    return `${prefix}1${yearDigit}${doyStr}${seqStr}`;
+    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 export function generateBigCode() {
