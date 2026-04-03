@@ -16,6 +16,7 @@ import {
     parseSourceFromPrefix,
 } from "../utils/unit-number.js";
 import { buildPrintedSnapshotFromState } from "../utils/reprint-snapshot.js";
+import { splitProductDisplayLines } from "../utils/product-display.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
@@ -370,22 +371,12 @@ export function initPreviewStep() {
 
     function renderProductName(productEl, productCode) {
         if (!productEl) return;
-        const raw = typeof productCode === "string" ? productCode.trim() : "";
         productEl.textContent = "";
-        if (!raw) {
-            productEl.textContent = "—";
-            return;
-        }
-        const match = raw.match(/^(.*?)(-(01|02))$/);
-        if (match) {
-            const base = match[1];
-            const suffix = match[2];
-            productEl.appendChild(document.createTextNode(base));
-            productEl.appendChild(document.createElement("br"));
-            productEl.appendChild(document.createTextNode(suffix));
-            return;
-        }
-        productEl.textContent = raw;
+        const lines = splitProductDisplayLines(productCode);
+        lines.forEach((line, index) => {
+            if (index > 0) productEl.appendChild(document.createElement("br"));
+            productEl.appendChild(document.createTextNode(line));
+        });
     }
 
     function renderPreview() {
