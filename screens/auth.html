@@ -36,12 +36,43 @@
                 >
             </div>
             <div>
-                <input
-                    id="authPassword"
-                    type="password"
-                    placeholder="Enter password"
-                    style="padding: 10px"
-                />
+                <div class="password-field">
+                    <input
+                        id="authPassword"
+                        class="password-field__input"
+                        type="password"
+                        placeholder="Enter password"
+                        style="padding: 10px"
+                    />
+                    <button
+                        id="authPasswordToggle"
+                        class="password-toggle"
+                        type="button"
+                        aria-label="Show password"
+                        aria-pressed="false"
+                        title="Show password"
+                    >
+                        <svg
+                            class="password-toggle__icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            aria-hidden="true"
+                        >
+                            <path
+                                d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"
+                            ></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                class="password-toggle__slash hidden"
+                                d="M4 4l16 16"
+                            ></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
         <div style="margin-top: 16px; gap: 16px">

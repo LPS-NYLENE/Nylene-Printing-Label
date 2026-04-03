@@ -8,6 +8,7 @@ import {
 export function initAuthStep() {
     const email = document.getElementById("authEmail");
     const pwd = document.getElementById("authPassword");
+    const pwdToggle = document.getElementById("authPasswordToggle");
     const chkPR = document.getElementById("chkPR");
     const chkCoperion = document.getElementById("chkCoperion");
     const btn = document.getElementById("btnAuthLogin");
@@ -17,6 +18,19 @@ export function initAuthStep() {
 
     function setError(msg) {
         if (err) err.textContent = msg || "";
+    }
+
+    function syncPasswordToggle() {
+        if (!pwd || !pwdToggle) return;
+        const passwordVisible = pwd.type === "text";
+        const label = passwordVisible ? "Hide password" : "Show password";
+        pwdToggle.setAttribute("aria-label", label);
+        pwdToggle.setAttribute("aria-pressed", String(passwordVisible));
+        pwdToggle.title = label;
+        const slash = pwdToggle.querySelector(".password-toggle__slash");
+        if (slash) {
+            slash.classList.toggle("hidden", !passwordVisible);
+        }
     }
 
     // Enforce mutual exclusivity
@@ -78,6 +92,22 @@ export function initAuthStep() {
                 setError("Login failed. Please try again");
             }
         }
+    }
+
+    if (pwdToggle) {
+        pwdToggle.addEventListener("click", () => {
+            const showPassword = pwd.type === "password";
+            pwd.type = showPassword ? "text" : "password";
+            syncPasswordToggle();
+            pwd.focus();
+            const cursorPos = pwd.value.length;
+            if (typeof pwd.setSelectionRange === "function") {
+                try {
+                    pwd.setSelectionRange(cursorPos, cursorPos);
+                } catch {}
+            }
+        });
+        syncPasswordToggle();
     }
 
     btn.addEventListener("click", login);
