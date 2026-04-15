@@ -1,10 +1,10 @@
 import { state, showScreen } from "../state.js";
 import { generateUnitNumberFromFirebase } from "../utils/generators.js";
-import { loadLogs } from "../logs.js";
 import { getAppInstance } from "../firebase-db.js";
 import { initReissueFlow } from "./reissue.js";
 import { initReissueNewFlow } from "./reissue-new.js";
 import { buildPrintedSnapshotFromRecord } from "../utils/reprint-snapshot.js";
+import { findLatestPrintRecordByFlow } from "../utils/print-records.js";
 import {
     getAuth,
     signOut,
@@ -140,27 +140,42 @@ export function initSourceStep() {
             }
         });
 
-    // Reprint last printed label from either the P&R or Coperion screen.
+    // Reprint the latest matching label from Firebase so every system uses the same source.
     const reprintButtons = [
-        document.getElementById("btnReprint"),
-        document.getElementById("btnReprintCoperion"),
-    ].filter(Boolean);
-    reprintButtons.forEach((reprintBtn) => {
-        reprintBtn.addEventListener("click", () => {
-            let snap = state.lastPrinted;
-            if (!snap) {
-                const logs = loadLogs();
-                const last = logs[logs.length - 1];
-                if (last) {
-                    snap = buildPrintedSnapshotFromRecord(last);
-                    // Cache for subsequent quick reprints
-                    state.lastPrinted = snap;
-                    state.reprintAvailable = true;
-                } else {
-                    alert("No previous label to reprint.");
-                    return;
-                }
+        {
+            button: document.getElementById("btnReprint"),
+            isCoperion: false,
+        },
+        {
+            button: document.getElementById("btnReprintCoperion"),
+            isCoperion: true,
+        },
+    ].filter(({ button }) => Boolean(button));
+    reprintButtons.forEach(({ button, isCoperion }) => {
+        button.addEventListener("click", async () => {
+            let snap = null;
+            const originalLabel = button.textContent;
+            button.disabled = true;
+            button.textContent = "Loading...";
+            try {
+                const latestRecord = await findLatestPrintRecordByFlow(isCoperion);
+                snap = buildPrintedSnapshotFromRecord(latestRecord);
+            } catch (e) {
+                console.warn("Failed to fetch latest reprint record from Firebase", e);
+                alert("Unable to load the latest label from the database.");
+                return;
+            } finally {
+                button.disabled = false;
+                button.textContent = originalLabel;
             }
+            if (!snap) {
+                alert("No previous label to reprint.");
+                return;
+            }
+
+            state.lastPrinted = snap;
+            state.reprintAvailable = true;
+
             // Save current working state to restore after printing
             const saved = {
                 unitNumber: state.unitNumber,
