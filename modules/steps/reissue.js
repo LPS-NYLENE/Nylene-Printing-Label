@@ -1,6 +1,7 @@
 import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { findLatestPrintRecordByUnit } from "../utils/print-records.js";
+import { promptForPassword } from "../utils/operator-prompts.js";
 import {
     COPERION_PRODUCT_CHOICES,
     PR_PRODUCT_CHOICES,
@@ -253,7 +254,11 @@ export function initReissueFlow() {
     }
 
     reissueButtons.forEach((reissueBtn) => {
-        reissueBtn.addEventListener("click", () => {
+        reissueBtn.addEventListener("click", async () => {
+            const authed = await promptForPassword({
+                title: "Enter password",
+            });
+            if (!authed) return;
             openSearchModal();
         });
     });
