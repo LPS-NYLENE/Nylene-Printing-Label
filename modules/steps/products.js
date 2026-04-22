@@ -336,13 +336,6 @@ export function initProductsStep() {
                     return;
                 }
 
-                if (activeSlot === "primary" && isBlank) {
-                    if (productsErrorEl)
-                        productsErrorEl.textContent =
-                            "Select another product that is not BLANK";
-                    return;
-                }
-
                 if (activeSlot === "primary") {
                     state.productSlots.primary = isBlank ? null : prod;
                 } else {
@@ -425,15 +418,6 @@ export function initProductsStep() {
                     return;
                 }
 
-                if (activeSlot === "primary" && isBlank) {
-                    if (productsModalErrorEl)
-                        productsModalErrorEl.textContent =
-                            "select a product that is not BLANK";
-                    // Restore selection highlight to current value/
-                    showChoices();
-                    return;
-                }
-
                 if (activeSlot === "primary") {
                     state.productSlots.primary = isBlank ? null : prod;
                 } else {
@@ -466,7 +450,7 @@ export function initProductsStep() {
                 state.productSlots,
                 state.activeProductSlot,
             );
-            if (!active) {
+            if (!active && state.activeProductSlot === "secondary") {
                 if (productsModalErrorEl)
                     productsModalErrorEl.textContent =
                         "select a product that is not BLANK";
