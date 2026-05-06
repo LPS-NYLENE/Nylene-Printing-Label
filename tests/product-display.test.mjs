@@ -10,6 +10,13 @@ test("renders compound bags suffix on a second line", () => {
     ]);
 });
 
+test("renders graded bags suffix on the bags line", () => {
+    assert.deepEqual(splitProductDisplayLines("BX3WQ662X-02BAGS"), [
+        "BX3WQ662X",
+        "-02BAGS",
+    ]);
+});
+
 test("renders graded suffix on a second line", () => {
     assert.deepEqual(splitProductDisplayLines("BX3WQ662X-01"), [
         "BX3WQ662X",
