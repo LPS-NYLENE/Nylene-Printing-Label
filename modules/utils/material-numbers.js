@@ -25,7 +25,7 @@ const RAW_MATERIAL_NUMBERS = {
     // Common short-code fallbacks used by the app UI:
     BX3WQ662: "10248654",
 
-    // Additional mappings from the provided list (best-effort coverage)
+    // Additional mappings from the provided list (best-effort coverage.)
     "CAPROLACTAM 80% LSG - TOTE": "10249763",
     "NYLENE 406C-NAT BPL": "10305400",
     "700D": "10305571",
