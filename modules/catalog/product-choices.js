@@ -19,6 +19,7 @@ export const PR_DEFAULT_PRODUCT = "BLANK";
 
 // Allowed products for P&R (from provided list)
 export const PR_PRODUCT_CHOICES = dedupeStable([
+    "406C-NAT-BAGS",
     "CSDN-INT",
     "BS700D",
     "BS640T",
