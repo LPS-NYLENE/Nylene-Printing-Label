@@ -26,6 +26,7 @@ const RAW_MATERIAL_NUMBERS = {
     BX3WQ662: "10248654",
 
     // Additional mappings from the provided list (best-effort coverage)
+    "406C-NAT-BAGS": "10305400",
     "CAPROLACTAM 80% LSG - TOTE": "10249763",
     "NYLENE 406C-NAT BPL": "10305400",
     "700D": "10305571",
