@@ -51,7 +51,7 @@ export const PR_PRODUCT_CHOICES = dedupeStable([
     "L-196",
     "700D-INT",
     "INT-190",
-    "406-NAT-BAGS"
+    "406C-NAT-BAGS"
 ]);
 
 export const COPERION_DEFAULT_PRODUCT = "BX3WQ662";
