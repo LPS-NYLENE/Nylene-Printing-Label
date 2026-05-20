@@ -77,6 +77,21 @@ test("Coperion sequence continues from regular boxes only", () => {
     assert.equal(next, 402);
 });
 
+test("Coperion sequence continues from legacy year digits on the same day", () => {
+    const next = getNextCoperionSequenceFromRecords(
+        [
+            {
+                unitNumber: "EA16365409",
+                reissueFlag: "",
+                productLine: "Coperion",
+            },
+        ],
+        { prefix: "EA26365" },
+    );
+
+    assert.equal(next, 410);
+});
+
 test("Compound bags sequence ignores RI labels before the first regular box of the day", () => {
     const next = getNextCompoundBagsSequenceFromRecords([
         {
@@ -110,11 +125,32 @@ test("P&R sequence ignores same-day Coperion prefixes when computing the next su
     assert.equal(next, 18);
 });
 
+test("P&R sequence ignores same-day legacy Coperion prefixes", () => {
+    const next = getNextPrSequenceFromRecords(
+        [
+            {
+                unitNumber: "AS26092017",
+                reissueFlag: "",
+                productLine: "P&R",
+            },
+            {
+                unitNumber: "EA16092417",
+                reissueFlag: "",
+                productLine: "",
+            },
+        ],
+        { coperionPrefixForDay: "EA26092" },
+    );
+
+    assert.equal(next, 18);
+});
+
 test("Coperion sequence restarts at 401 for a new day prefix", () => {
     const next = getNextCoperionSequenceFromRecords(
         [
             {
-                unitNumber: "EA26091417",
+                // unitNumber: "EA26091417",
+                unitNumber: "EA16091417",
                 reissueFlag: "",
                 productLine: "Coperion",
             },

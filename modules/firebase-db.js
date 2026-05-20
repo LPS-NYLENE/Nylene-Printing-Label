@@ -186,7 +186,8 @@ export async function getNextDailySequenceFromFirebase(date) {
     const { start, end, dayOfYearStr, yearDigits, localDayKey } =
         getLabelDayContext(date);
 
-    // Build the Coperion EA prefix for this day so we can exclude it from P&R sequence
+  // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
+    // including legacy labels whose year digits were generated differently.
     const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
 
     // Determine which buckets to read:
@@ -209,7 +210,8 @@ export async function getNextDailySequenceFromFirebase(date) {
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)
-// - Increments based on existing regular (non-RI) records in DB that match the day's EA prefix
+// - Increments based on existing regular (non-RI) records in DB for the same EA day prefix,
+//   ignoring the year digits so migrated labels continue from legacy EA16DDD suffixes
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();

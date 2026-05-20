@@ -15,13 +15,23 @@ function isCompoundBagsRecord(record) {
     return product.endsWith("bags");
 }
 
+function matchesDayPrefixIgnoringYear(unitNumber, dayPrefix) {
+    const unit = normalizeUnitNumber(unitNumber);
+    const prefix = normalizeUnitNumber(dayPrefix);
+    if (!prefix) return false;
+    if (unit.startsWith(prefix)) return true;
+    if (unit.length < 7 || prefix.length < 7) return false;
+    return unit.slice(0, 2) === prefix.slice(0, 2) &&
+        unit.slice(4, 7) === prefix.slice(4, 7);
+}
+
 function isCoperionRecord(record, coperionPrefixForDay) {
     const productLine = String(record?.productLine || "").trim();
     const unit = normalizeUnitNumber(record?.unitNumber);
-    const prefix = normalizeUnitNumber(coperionPrefixForDay);
     return (
         productLine === "Coperion" ||
-        (prefix && unit.startsWith(prefix))
+              matchesDayPrefixIgnoringYear(unit, coperionPrefixForDay)
+
     );
 }
 
@@ -74,7 +84,7 @@ export function getNextCoperionSequenceFromRecords(
         includeRecord: (record) =>
             !isReissueRecord(record) &&
             normalizedPrefix &&
-            normalizeUnitNumber(record?.unitNumber).startsWith(normalizedPrefix),
+             matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
     });
 }
 
