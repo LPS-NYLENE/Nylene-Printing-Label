@@ -41,6 +41,7 @@ export function getLabelDayContext(date) {
         end,
         dayOfYear,
         dayOfYearStr: String(dayOfYear).padStart(3, "0"),
+        yearDigits: String(effective.getFullYear()).slice(-2),
         yearDigit: String(effective.getFullYear()).slice(-1),
         localDayKey: formatLocalDayKey(start),
     };

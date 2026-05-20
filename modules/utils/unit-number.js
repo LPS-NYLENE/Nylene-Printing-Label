@@ -37,8 +37,8 @@ export function buildUnitNumberFromParts({ prefix, year, day, box }) {
     }
 
     const yDigits = normalizeDigits(year);
-    const yearDigit = yDigits ? yDigits.slice(-1) : "";
-    if (!yearDigit) return { ok: false, error: "Enter a year." };
+    const yearDigits = yDigits ? yDigits.slice(-2).padStart(2, "0") : "";
+    if (!yearDigits) return { ok: false, error: "Enter a year." };
 
     const dDigits = normalizeDigits(day);
     const dNum = parseInt(dDigits, 10);
@@ -54,7 +54,7 @@ export function buildUnitNumberFromParts({ prefix, year, day, box }) {
     }
     const boxStr = String(bNum).padStart(3, "0");
 
-    // Format: PREFIX + "1" + yearDigit + DDD + SSS
-    return { ok: true, unitNumber: `${src}1${yearDigit}${dayStr}${boxStr}` };
+    // Format: PREFIX + YY + DDD + SSS
+    return { ok: true, unitNumber: `${src}${yearDigits}${dayStr}${boxStr}` };
 }
 

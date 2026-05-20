@@ -30,7 +30,7 @@ function setFromRecord(record) {
 
     state.isCoperion =
         String(record && record.productLine ? record.productLine : "") ===
-            "Coperion" || unit.startsWith("EA1");
+            "Coperion" || unit.startsWith(COPERION_PREFIX);
 
     state.activeGroup = sourceGroup || null;
     if (sourceGroup && sourceLetter) state.source[sourceGroup] = sourceLetter;

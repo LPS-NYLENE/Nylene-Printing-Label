@@ -5,7 +5,7 @@ function normalizeUnitNumber(value) {
 export function inferIsCoperionFromRecord(record) {
     const productLine = String(record?.productLine || "").trim();
     const unitNumber = normalizeUnitNumber(record?.unitNumber);
-    return productLine === "Coperion" || unitNumber.startsWith("EA1");
+    return productLine === "Coperion" || unitNumber.startsWith("EA");
 }
 
 export function buildPrintedSnapshotFromState(currentState, printedAt) {
