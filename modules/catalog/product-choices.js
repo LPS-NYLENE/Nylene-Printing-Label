@@ -1,5 +1,5 @@
 // Centralized product choice lists used across UI entry points.
-// Keep these lists small, explicit, and stable to prevent operator typos.
+// Keep these lists small, explicit, and stable to prevent operator typos..
 
 function dedupeStable(list) {
     const seen = new Set();
