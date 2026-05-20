@@ -43,7 +43,7 @@ export function initReissueFlow() {
     function isCoperionRecord(record) {
         const productLine = String(record?.productLine || "");
         const unit = normalizeUnit(record?.unitNumber || "");
-        return productLine === "Coperion" || unit.startsWith("EA1");
+        return productLine === "Coperion" || unit.startsWith("EA");
     }
 
     function setReissueProductOptions({ isCoperion, currentValue }) {
@@ -218,7 +218,7 @@ export function initReissueFlow() {
         const originalUnit = String(activeRecord.unitNumber || "");
         const productLine = String(activeRecord.productLine || "");
         const isCoperion =
-            productLine === "Coperion" || normalizeUnit(originalUnit).startsWith("EA1");
+            productLine === "Coperion" || normalizeUnit(originalUnit).startsWith("EA");
 
         if (!isCoperion && (!sourceGroup || !sourceLetter)) {
             setEditError("Source information is missing for this label.");

@@ -11,7 +11,7 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     const seq = getNextDailySequence(dayContext.effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Async variant: compute the next unit number by reading existing prints
@@ -23,23 +23,23 @@ export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) 
     const seq = await getNextDailySequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Explicit Coperion generator, to be used only for Coperion flow/screens.
-// Format: EA + 1 + last digit of year + day-of-year (001–365/366) + suffix starting at 401
+// Format: EA + last two digits of year + day-of-year (001–365/366) + suffix starting at 401
 export async function generateCoperionUnitNumberFromFirebase() {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCoperionSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
-    return `EA1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
+    return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 // Explicit Compound+BAGS generator, used only when:
 // - sourceGroup === "compound"
 // - product code ends with "BAGS"
-// Format: (AC|BC) + 1 + last digit of year + day-of-year (DDD) + suffix starting at 201
+// Format: (AC|BC) + last two digits of year + day-of-year (DDD) + suffix starting at 201
 export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceGroup,
     sourceLetter
@@ -49,7 +49,7 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 const SEQ_STORE_KEY = "unit_seq_store_v1";
@@ -98,7 +98,7 @@ export function commitPrintedUnitNumber(sourceGroup, sourceLetter) {
     const seq = getAndIncrementDailySequence(dayContext.effective);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}1${dayContext.yearDigit}${dayContext.dayOfYearStr}${seqStr}`;
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
 export function generateBigCode() {

@@ -497,17 +497,18 @@ document.getElementById("excelBtn").addEventListener("click", async () => {
 });
 
 // Generators
-// Unit Number format: AC15 + DDD + SSS
-// - Prefix: "AC15"
+// Unit Number format: AC + YY + DDD + SSS
+// - YY: last two digits of the current year
 // - DDD: day-of-year (001-365/366) for current year
 // - SSS: sequential 3-digit counter starting at 001 each day
 function generateUnitNumber() {
     const now = new Date();
+    const yearDigits = String(now.getFullYear()).slice(-2);
     const doy = getDayOfYear(now); // 1..365/366
     const doyStr = String(doy).padStart(3, "0");
     const seq = getAndIncrementDailySequence(now);
     const seqStr = String(seq).padStart(3, "0");
-    return `AC15${doyStr}${seqStr}`;
+    return `AC${yearDigits}${doyStr}${seqStr}`;
 }
 
 function getDayOfYear(date) {
