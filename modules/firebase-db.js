@@ -183,11 +183,11 @@ export async function fetchAllPrintsFromFirebase() {
 // Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const { start, end, dayOfYearStr, yearDigit, localDayKey } =
+    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
         getLabelDayContext(date);
 
     // Build the Coperion EA prefix for this day so we can exclude it from P&R sequence
-    const coperionPrefixForDay = `EA1${yearDigit}${dayOfYearStr}`;
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
 
     // Determine which buckets to read:
     // - local day key (new writes)
@@ -207,17 +207,17 @@ export async function getNextDailySequenceFromFirebase(date) {
 
 // Compute the next Coperion daily sequence (last three digits) for the given date.
 // Rules:
-// - Prefix for Coperion: EA + 1 + last-digit-of-year + day-of-year (DDD)
+// - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)
 // - Increments based on existing regular (non-RI) records in DB that match the day's EA prefix
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const { start, end, dayOfYearStr, yearDigit, localDayKey } =
+    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
         getLabelDayContext(date);
 
-    // Build the EA prefix for the day: EA1[Y][DDD]
-    const prefix = `EA1${yearDigit}${dayOfYearStr}`;
+    // Build the EA prefix for the day: EA[YY][DDD]
+    const prefix = `EA${yearDigits}${dayOfYearStr}`;
 
     // Determine which buckets to read:
     // - local day key (new writes)

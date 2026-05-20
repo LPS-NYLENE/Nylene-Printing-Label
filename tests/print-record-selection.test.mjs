@@ -10,17 +10,17 @@ test("selectLatestPrintRecordByFlow returns the newest P&R record only", () => {
     const records = [
         {
             timestamp: "2026-04-15T09:00:00.000Z",
-            unitNumber: "AD16001001",
+            unitNumber: "AD26001001",
             productLine: "P&R",
         },
         {
             timestamp: "2026-04-15T09:05:00.000Z",
-            unitNumber: "EA16084001",
+            unitNumber: "EA26084001",
             productLine: "Coperion",
         },
         {
             timestamp: "2026-04-15T09:10:00.000Z",
-            unitNumber: "BD16001002",
+            unitNumber: "BD26001002",
             productLine: "P&R",
         },
     ];
@@ -32,17 +32,17 @@ test("selectLatestPrintRecordByFlow returns the newest Coperion record only", ()
     const records = [
         {
             timestamp: "2026-04-15T09:00:00.000Z",
-            unitNumber: "AD16001001",
+            unitNumber: "AD26001001",
             productLine: "P&R",
         },
         {
             timestamp: "2026-04-15T09:05:00.000Z",
-            unitNumber: "EA16084001",
+            unitNumber: "EA26084001",
             productLine: "P&R",
         },
         {
             timestamp: "2026-04-15T09:10:00.000Z",
-            unitNumber: "BD16001002",
+            unitNumber: "BD26001002",
             productLine: "P&R",
         },
     ];
@@ -54,20 +54,20 @@ test("selectLatestPrintRecordByUnit returns the newest matching unit", () => {
     const records = [
         {
             timestamp: "2026-04-15T09:00:00.000Z",
-            unitNumber: "AD16001001",
+            unitNumber: "AD26001001",
         },
         {
             timestamp: "2026-04-15T09:05:00.000Z",
-            unitNumber: "BD16001002",
+            unitNumber: "BD26001002",
         },
         {
             timestamp: "2026-04-15T09:10:00.000Z",
-            unitNumber: "ad16001001",
+            unitNumber: "ad26001001",
         },
     ];
 
     assert.deepEqual(
-        selectLatestPrintRecordByUnit(records, " AD16001001 "),
+        selectLatestPrintRecordByUnit(records, " AD26001001 "),
         records[2],
     );
 });

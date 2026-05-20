@@ -130,7 +130,7 @@ export function initCoperionStep() {
             String(state.unitNumber || "")
                 .trim()
                 .toUpperCase()
-                .startsWith("EA1");
+                .startsWith("EA");
         state.activeGroup = "compound";
         state.source.compound = "A"; // default mapping for Coperion
         state.isCoperion = true;

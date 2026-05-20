@@ -27,11 +27,32 @@ test("buildUnitNumberFromParts builds expected unit number", () => {
         box: "003",
     });
     assert.equal(res.ok, true);
-    assert.equal(res.unitNumber, "AD15324003");
+    assert.equal(res.unitNumber, "AD25324003");
+});
+
+test("buildUnitNumberFromParts replaces only the year digits after any prefix", () => {
+    assert.equal(
+        buildUnitNumberFromParts({
+            prefix: "AC",
+            year: "2026",
+            day: "365",
+            box: "001",
+        }).unitNumber,
+        "AC26365001",
+    );
+    assert.equal(
+        buildUnitNumberFromParts({
+            prefix: "EA",
+            year: "2027",
+            day: "365",
+            box: "401",
+        }).unitNumber,
+        "EA27365401",
+    );
 });
 
 test("normalizeUnitNumber trims and uppercases", () => {
-    assert.equal(normalizeUnitNumber(" ad15324003 "), "AD15324003");
+    assert.equal(normalizeUnitNumber(" ad25324003 "), "AD25324003");
 });
 
 test("buildUnitNumberFromParts rejects invalid day", () => {
@@ -55,6 +76,18 @@ test("getLabelDayContext rolls over immediately at local midnight", () => {
 
     assert.equal(context.dayOfYear, 92);
     assert.equal(context.dayOfYearStr, "092");
+    assert.equal(context.yearDigits, "26");
     assert.equal(context.localDayKey, "2026-04-02");
+});
+
+test("getLabelDayContext uses the current year last two digits", () => {
+    assert.equal(
+        getLabelDayContext(new Date("2026-12-31T12:00:00-05:00")).yearDigits,
+        "26",
+    );
+    assert.equal(
+        getLabelDayContext(new Date("2027-01-01T12:00:00-05:00")).yearDigits,
+        "27",
+    );
 });
 
