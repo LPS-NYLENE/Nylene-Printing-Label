@@ -18,6 +18,66 @@ export function initSourceStep() {
         state.lockUnitNumberOnce = false;
     }
 
+    function clearSourceSelection() {
+        document
+            .querySelectorAll(".btn-col[data-group] .option, [data-special]")
+            .forEach((x) => x.classList.remove("selected"));
+        state.source.silo = null;
+        state.source.dryer = null;
+        state.source.compound = null;
+        state.source.special = null;
+        state.source.other = null;
+        state.activeGroup = null;
+        state.selectedProduct = null;
+    }
+
+    function normalizeCompoundLine(line) {
+        const value = String(line || "").toUpperCase();
+        return value === "A" || value === "B" ? value : null;
+    }
+
+    function applySourceView(detail = {}) {
+        const compoundLine = normalizeCompoundLine(detail.compoundLine);
+        const isCompoundOnly = Boolean(compoundLine);
+        const sourceTitle = document.getElementById("sourceTitle");
+        const sourceGrid = document.getElementById("sourceGrid");
+
+        clearReissueState();
+        clearSourceSelection();
+
+        if (sourceTitle) {
+            sourceTitle.textContent = isCompoundOnly
+                ? "CHOOSE SOURCE FOR COMPOUND :"
+                : "CHOOSE SOURCE FOR P&R :";
+        }
+        if (sourceGrid) {
+            sourceGrid.classList.toggle("compound-only", isCompoundOnly);
+        }
+        document.querySelectorAll("[data-source-card]").forEach((card) => {
+            const group = card.getAttribute("data-source-card");
+            card.classList.toggle(
+                "hidden",
+                isCompoundOnly && group !== "compound"
+            );
+        });
+        document
+            .querySelectorAll('.btn-col[data-group="compound"] .option')
+            .forEach((btn) => {
+                btn.classList.toggle(
+                    "hidden",
+                    isCompoundOnly && btn.dataset.value !== compoundLine
+                );
+            });
+        document.querySelectorAll("[data-special]").forEach((btn) => {
+            btn.classList.toggle("hidden", isCompoundOnly);
+        });
+    }
+
+    document.addEventListener("configureSourceView", (event) => {
+        applySourceView(event.detail || {});
+    });
+    applySourceView();
+
     const copBtn = document.getElementById("btnCoperion");
     if (copBtn)
         copBtn.addEventListener("click", () => {

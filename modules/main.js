@@ -68,9 +68,20 @@ function routeAfterLogin() {
         state.isCoperion = true;
         showScreen("coperion");
         document.dispatchEvent(new CustomEvent("enterCoperion"));
+    } else if (lastFlow === "compound-a" || lastFlow === "compound-b") {
+        state.isCoperion = false;
+        showScreen("source");
+        document.dispatchEvent(
+            new CustomEvent("configureSourceView", {
+                detail: {
+                    compoundLine: lastFlow === "compound-a" ? "A" : "B",
+                },
+            })
+        );
     } else {
         state.isCoperion = false;
         showScreen("source");
+        document.dispatchEvent(new CustomEvent("configureSourceView"));
     }
 }
 
