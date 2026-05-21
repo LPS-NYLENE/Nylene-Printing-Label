@@ -10,46 +10,76 @@ export function initAuthStep() {
     const pwd = document.getElementById("authPassword");
     const chkPR = document.getElementById("chkPR");
     const chkCoperion = document.getElementById("chkCoperion");
+    const chkCompoundA = document.getElementById("chkCompoundA");
+    const chkCompoundB = document.getElementById("chkCompoundB");
     const btn = document.getElementById("btnAuthLogin");
     const err = document.getElementById("authError");
 
-    if (!email || !pwd || !chkPR || !chkCoperion || !btn) return;
+    if (
+        !email ||
+        !pwd ||
+        !chkPR ||
+        !chkCoperion ||
+        !chkCompoundA ||
+        !chkCompoundB ||
+        !btn
+    )
+        return;
+
+    const flowOptions = [
+        { input: chkPR, flow: "pr" },
+        { input: chkCoperion, flow: "cop" },
+        { input: chkCompoundA, flow: "compound-a" },
+        { input: chkCompoundB, flow: "compound-b" },
+    ];
 
     function setError(msg) {
         if (err) err.textContent = msg || "";
     }
 
     // Enforce mutual exclusivity
-    chkPR.addEventListener("change", () => {
-        if (chkPR.checked) chkCoperion.checked = false;
-    });
-    chkCoperion.addEventListener("change", () => {
-        if (chkCoperion.checked) chkPR.checked = false;
+    flowOptions.forEach(({ input }) => {
+        input.addEventListener("change", () => {
+            if (!input.checked) return;
+            flowOptions.forEach((option) => {
+                if (option.input !== input) option.input.checked = false;
+            });
+        });
     });
 
     function validate() {
-        const pr = chkPR.checked;
-        const cop = chkCoperion.checked;
-        if (pr && cop) {
-            setError("Select either P&R or Coperion, not both");
+        const selected = flowOptions.filter(({ input }) => input.checked);
+        if (selected.length > 1) {
+            setError("Select one area only");
             return null;
         }
-        if (!pr && !cop) {
-            setError("Please select P&R or Coperion");
+        if (selected.length === 0) {
+            setError("Please select an area");
             return null;
         }
         setError("");
-        return { pr, cop };
+        return selected[0].flow;
     }
 
-    function proceedNext(sel) {
-        if (sel.pr) {
+    function proceedNext(flow) {
+        if (flow === "pr") {
             state.isCoperion = false;
             showScreen("source");
-        } else if (sel.cop) {
+            document.dispatchEvent(new CustomEvent("configureSourceView"));
+        } else if (flow === "cop") {
             state.isCoperion = true;
             showScreen("coperion");
             document.dispatchEvent(new CustomEvent("enterCoperion"));
+        } else if (flow === "compound-a" || flow === "compound-b") {
+            state.isCoperion = false;
+            showScreen("source");
+            document.dispatchEvent(
+                new CustomEvent("configureSourceView", {
+                    detail: {
+                        compoundLine: flow === "compound-a" ? "A" : "B",
+                    },
+                })
+            );
         }
     }
 
@@ -63,9 +93,10 @@ export function initAuthStep() {
         try {
             setError("");
             // Persist last flow selection for post-login routing
-            localStorage.setItem("last_flow_v1", sel.cop ? "cop" : "pr");
+            localStorage.setItem("last_flow_v1", sel);
             await signInWithEmailAndPassword(auth, userEmail, password);
-            // onAuthStateChanged in main.js will route appropriately
+            proceedNext(sel);
+            // onAuthStateChanged in main.js will keep the routed screen in sync.
         } catch (e) {
             const code = e && e.code ? String(e.code) : "";
             if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
