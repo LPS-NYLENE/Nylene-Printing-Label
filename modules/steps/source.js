@@ -69,8 +69,9 @@ export function initSourceStep() {
                     isCompoundOnly && btn.dataset.value !== compoundLine
                 );
             });
+        const showSpecialButtons = !isCompoundOnly || compoundLine === "A";
         document.querySelectorAll("[data-special]").forEach((btn) => {
-            btn.classList.toggle("hidden", isCompoundOnly);
+            btn.classList.toggle("hidden", !showSpecialButtons);
         });
     }
 
