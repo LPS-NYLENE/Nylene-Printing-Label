@@ -57,7 +57,7 @@ export function initSourceStep() {
             const group = card.getAttribute("data-source-card");
             card.classList.toggle(
                 "hidden",
-                // isCompoundOnly && group !== "compound"
+                // isCompoundOnly && group !== "compoundd"
                 isCompoundOnly ? group !== "compound" : group === "compound"
             );
         });
