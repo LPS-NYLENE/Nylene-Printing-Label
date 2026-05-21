@@ -206,7 +206,7 @@ export async function getNextDailySequenceFromFirebase(date) {
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
 }
 
-// Compute the next Coperion daily sequence (last three digits) for the given date.
+// Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)

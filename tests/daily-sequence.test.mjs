@@ -149,7 +149,7 @@ test("Coperion sequence restarts at 401 for a new day prefix", () => {
     const next = getNextCoperionSequenceFromRecords(
         [
             {
-                // unitNumber: "EA26091417",
+                // unitNumber: "EA2609141",
                 unitNumber: "EA16091417",
                 reissueFlag: "",
                 productLine: "Coperion",

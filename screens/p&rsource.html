@@ -1,10 +1,10 @@
 <section id="screen-source" class="screen active">
     <header class="screen-header">
         <button id="excelBtn" class="pill small">EXCEL</button>
-        <h1>CHOOSE SOURCE FOR P&R :</h1>
+        <h1 id="sourceTitle">CHOOSE SOURCE FOR P&R :</h1>
     </header>
-    <div class="grid grid-3">
-        <div class="card">
+    <div id="sourceGrid" class="grid grid-3 source-grid">
+        <div class="card" data-source-card="silo">
             <h2>SILO / BULK:</h2>
             <div class="btn-col" data-group="silo">
                 <button class="btn option" data-value="A">A</button>
@@ -13,7 +13,7 @@
                 <button class="btn option" data-value="D">D</button>
             </div>
         </div>
-        <div class="card">
+        <div class="card" data-source-card="dryer">
             <h2>DRYER:</h2>
             <div class="btn-col" data-group="dryer">
                 <button class="btn option" data-value="A">A</button>
@@ -22,7 +22,7 @@
                 <button class="btn option" data-value="D">D</button>
             </div>
         </div>
-        <div class="card">
+        <div class="card" data-source-card="compound">
             <h2>COMPOUND:</h2>
             <div class="btn-col" data-group="compound">
                 <button class="btn option" data-value="A">A</button>
