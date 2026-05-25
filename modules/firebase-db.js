@@ -16,11 +16,15 @@ import {
     get,
     set,
     onValue,
+    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
+    getLastPrSequenceFromRecords,
+    getLastCoperionSequenceFromRecords,
+    getLastCompoundBagsSequenceFromRecords,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -176,20 +180,44 @@ export async function fetchAllPrintsFromFirebase() {
     return rows;
 }
 
-// Compute the next daily sequence (last three digits) for a given date
-// by inspecting existing prints for that day in Realtime Database.
-// Buckets were historically stored under UTC day keys; we now store under local
-// day keys. For backward compatibility, we read both local and UTC buckets.
-// Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
-export async function getNextDailySequenceFromFirebase(date) {
+const MAX_DAILY_SEQUENCE = 999;
+
+function makeSequenceCounterPath(localDayKey, sequenceName) {
+    return `labelSequences/${localDayKey}/${sequenceName}/last`;
+}
+
+async function reserveSequenceTransaction(localDayKey, sequenceName, seedLast) {
     const db = getDatabaseInstance();
-    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
-        getLabelDayContext(date);
+    const counterRef = ref(
+        db,
+        makeSequenceCounterPath(localDayKey, sequenceName),
+    );
+    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
+    const result = await runTransaction(counterRef, (currentValue) => {
+        const current = Number(currentValue);
+        const currentLast = Number.isFinite(current) ? current : seed;
+        const baseLast = Math.max(seed, currentLast);
+        if (baseLast >= MAX_DAILY_SEQUENCE) return;
+        return baseLast + 1;
+    });
 
-  // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
-    // including legacy labels whose year digits were generated differently.
-    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    if (!result.committed) {
+        throw new Error(
+            `No ${sequenceName} label numbers remain for ${localDayKey}`,
+        );
+    }
 
+    const reserved = Number(result.snapshot.val());
+    if (!Number.isFinite(reserved)) {
+        throw new Error(
+            `Firebase did not return a reserved ${sequenceName} sequence`,
+        );
+    }
+    return reserved;
+}
+
+async function fetchPrintRecordsForLabelDay(db, dayContext) {
+    const { start, end, localDayKey } = dayContext;
     // Determine which buckets to read:
     // - local day key (new writes)
     // - UTC day keys spanning this local day (legacy writes / timezone edge)
@@ -202,8 +230,38 @@ export async function getNextDailySequenceFromFirebase(date) {
 
     const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
     const snaps = await Promise.all(refs.map((r) => get(r)));
-    const records = collectRecordsWithinWindow(snaps, start, end);
+    return collectRecordsWithinWindow(snaps, start, end);
+}
+
+// Compute the next daily sequence (last three digits) for a given date
+// by inspecting existing prints for that day in Realtime Database.
+// Buckets were historically stored under UTC day keys; we now store under local
+// day keys. For backward compatibility, we read both local and UTC buckets.
+// Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
+export async function getNextDailySequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits } = dayContext;
+
+    // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
+    // including legacy labels whose year digits were generated differently.
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
+}
+
+// Reserve the next P&R sequence atomically. The transaction is scoped to the
+// local label day and updates only the last three digits for that sequence.
+export async function reserveNextDailySequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastPrSequenceFromRecords(records, {
+        coperionPrefixForDay,
+    });
+    return reserveSequenceTransaction(localDayKey, "pr", seedLast);
 }
 
 // Compute the next Coperion daily sequence (last three digits) for the given date
@@ -215,26 +273,23 @@ export async function getNextDailySequenceFromFirebase(date) {
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
-        getLabelDayContext(date);
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits } = dayContext;
 
     // Build the EA prefix for the day: EA[YY][DDD]
     const prefix = `EA${yearDigits}${dayOfYearStr}`;
-
-    // Determine which buckets to read:
-    // - local day key (new writes)
-    // - UTC day keys spanning this local day (legacy writes / timezone edge)
-    const dayKeys = new Set();
-    const startUtcKey = start.toISOString().slice(0, 10);
-    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-    dayKeys.add(localDayKey);
-    dayKeys.add(startUtcKey);
-    dayKeys.add(endUtcKey);
-
-    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-    const snaps = await Promise.all(refs.map((r) => get(r)));
-    const records = collectRecordsWithinWindow(snaps, start, end);
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCoperionSequenceFromRecords(records, { prefix });
+}
+
+export async function reserveNextCoperionSequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const prefix = `EA${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCoperionSequenceFromRecords(records, { prefix });
+    return reserveSequenceTransaction(localDayKey, "coperion", seedLast);
 }
 
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
@@ -245,22 +300,21 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const { start, end, localDayKey } = getLabelDayContext(date);
-
-    // Determine which buckets to read:
-    // - local day key (new writes)
-    // - UTC day keys spanning this local day (legacy writes / timezone edge)
-    const dayKeys = new Set();
-    const startUtcKey = start.toISOString().slice(0, 10);
-    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
-    dayKeys.add(localDayKey);
-    dayKeys.add(startUtcKey);
-    dayKeys.add(endUtcKey);
-
-    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
-    const snaps = await Promise.all(refs.map((r) => get(r)));
-    const records = collectRecordsWithinWindow(snaps, start, end);
+    const dayContext = getLabelDayContext(date);
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCompoundBagsSequenceFromRecords(records);
+}
+
+export async function reserveNextCompoundBagsSequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCompoundBagsSequenceFromRecords(records);
+    return reserveSequenceTransaction(
+        dayContext.localDayKey,
+        "compoundBags",
+        seedLast,
+    );
 }
 
 function parseIsoDateOrNow(value) {
