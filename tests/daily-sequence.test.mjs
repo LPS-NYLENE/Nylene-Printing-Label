@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-    getNextCompoundBagsSequenceFromRecords,
     getNextPrSequenceFromRecords,
+    getNextCoperionSequenceFromRecords,
+    getNextCompoundBagsSequenceFromRecords,
 } from "../modules/utils/daily-sequence.js";
 
 test("regular P&R sequence uses 001 through 200 only", () => {
@@ -58,14 +59,6 @@ test("Bags sequence starts at 201 and is shared across compound A/B lines", () =
         203,
     );
 });
-import test from "node:test";
-import assert from "node:assert/strict";
-
-import {
-    getNextPrSequenceFromRecords,
-    getNextCoperionSequenceFromRecords,
-    getNextCompoundBagsSequenceFromRecords,
-} from "../modules/utils/daily-sequence.js";
 
 test("P&R sequence ignores RI labels before the first regular box of the day", () => {
     const next = getNextPrSequenceFromRecords(
