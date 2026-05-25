@@ -18,15 +18,6 @@
           }
         }
       }
-    },
-    "labelSequences": {
-      ".read": "auth != null",
-      "$day": {
-        "$sequence": {
-          ".write": "auth != null",
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
-        }
-      }
     }
   }
 }
