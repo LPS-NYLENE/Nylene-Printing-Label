@@ -84,6 +84,9 @@ export function initProductsStep() {
     const choicesEl = document.getElementById("prProductChoices");
     const inlineWrap = document.getElementById("productInlineChoicesWrap");
     const inlineChoicesEl = document.getElementById("productInlineChoices");
+    const productSpecialButtons = Array.from(
+        document.querySelectorAll("[data-product-special]"),
+    );
 
     function syncBigCodeToActiveSlot() {
         const active = isTwoSlotProductContext(state.activeGroup)
@@ -249,6 +252,15 @@ export function initProductsStep() {
         if (changeBtn) changeBtn.classList.toggle("hidden", on);
     }
 
+    function setProductSpecialButtonsUI() {
+        const isCompoundA =
+            state.activeGroup === "compound" &&
+            String(state.source.compound || "").toUpperCase() === "A";
+        productSpecialButtons.forEach((btn) => {
+            btn.classList.toggle("hidden", !isCompoundA);
+        });
+    }
+
     function setProceedEnabled(enabled) {
         if (proceed) proceed.disabled = !enabled;
     }
@@ -353,6 +365,7 @@ export function initProductsStep() {
         if (productsErrorEl) productsErrorEl.textContent = "";
         const inline = isInlineSelectionMode();
         setInlineSelectionModeUI(inline);
+        setProductSpecialButtonsUI();
 
         if (isTwoSlotProductContext(state.activeGroup)) renderTwoSlotProducts();
         else renderOneSlotProduct();
