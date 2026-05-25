@@ -2,6 +2,11 @@ function normalizeUnitNumber(value) {
     return String(value || "").trim().toUpperCase();
 }
 
+export const PR_SEQUENCE_START = 1;
+export const PR_SEQUENCE_MAX = 200;
+export const BAGS_SEQUENCE_START = 201;
+export const LABEL_SEQUENCE_MAX = 999;
+
 export function isReissueRecord(record) {
     return String(record?.reissueFlag || "")
         .trim()
@@ -37,7 +42,11 @@ function isCoperionRecord(record, coperionPrefixForDay) {
 
 export function getNextSequenceFromRecords(
     records,
-    { startAt = 1, includeRecord = () => true } = {},
+    {
+        startAt = PR_SEQUENCE_START,
+        maxAt = LABEL_SEQUENCE_MAX,
+        includeRecord = () => true,
+    } = {},
 ) {
     const rows = Array.isArray(records) ? records : [];
     let maxSuffix = 0;
@@ -57,8 +66,10 @@ export function getNextSequenceFromRecords(
         }
     }
 
-    if (anyParseable) return Math.min(999, Math.max(startAt, maxSuffix + 1));
-    return Math.min(999, startAt + count);
+    const next = anyParseable
+        ? Math.max(startAt, maxSuffix + 1)
+        : startAt + count;
+    return next <= maxAt ? next : null;
 }
 
 export function getNextPrSequenceFromRecords(
@@ -66,7 +77,8 @@ export function getNextPrSequenceFromRecords(
     { coperionPrefixForDay = "" } = {},
 ) {
     return getNextSequenceFromRecords(records, {
-        startAt: 1,
+        startAt: PR_SEQUENCE_START,
+        maxAt: PR_SEQUENCE_MAX,
         includeRecord: (record) =>
             !isReissueRecord(record) &&
             !isCoperionRecord(record, coperionPrefixForDay) &&
@@ -81,6 +93,7 @@ export function getNextCoperionSequenceFromRecords(
     const normalizedPrefix = normalizeUnitNumber(prefix);
     return getNextSequenceFromRecords(records, {
         startAt: 401,
+        maxAt: LABEL_SEQUENCE_MAX,
         includeRecord: (record) =>
             !isReissueRecord(record) &&
             normalizedPrefix &&
@@ -90,7 +103,8 @@ export function getNextCoperionSequenceFromRecords(
 
 export function getNextCompoundBagsSequenceFromRecords(records) {
     return getNextSequenceFromRecords(records, {
-        startAt: 201,
+        startAt: BAGS_SEQUENCE_START,
+        maxAt: LABEL_SEQUENCE_MAX,
         includeRecord: (record) =>
             !isReissueRecord(record) && isCompoundBagsRecord(record),
     });

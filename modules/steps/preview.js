@@ -1,8 +1,10 @@
 import { state, showScreen } from "../state.js";
 import {
     generateUnitNumberFromFirebase,
+    reserveUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
+    reserveCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -211,15 +213,24 @@ export function initPreviewStep() {
     }
 
     async function handleInitialPrintFlow() {
-        // Ensure the displayed number is based on the current product/context.
-        await refreshUnitNumberIfNeeded();
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
+        const isReissuePrint =
+            Boolean(state.reissueFlowType) ||
+            String(state.reissueFlag || "").toUpperCase() === "RI";
+
+        if (isReissuePrint) {
+            // Reissues intentionally keep the operator-entered/original lot number.
+            await refreshUnitNumberIfNeeded();
+        } else {
+            state.unitNumber = await getUnitNumberForPrint(group, letter);
+            state.__unitNumberContextKey = getUnitNumberContextKey();
+        }
         renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
         try {
             await appendLogRecord();
             appendHistoryRecord();
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
             // Save snapshot of what was printed for reprint
             const printedAt = new Date().toISOString();
             state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
@@ -328,6 +339,17 @@ export function initPreviewStep() {
                 letter,
             );
         return await generateUnitNumberFromFirebase(group, letter);
+    }
+
+    async function getUnitNumberForPrint(group, letter) {
+        if (state.isCoperion)
+            return await generateCoperionUnitNumberFromFirebase();
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await reserveCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
+        return await reserveUnitNumberFromFirebase(group, letter);
     }
 
     function getUnitNumberContextKey() {

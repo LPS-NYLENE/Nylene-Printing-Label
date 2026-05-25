@@ -2,6 +2,66 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    getNextCompoundBagsSequenceFromRecords,
+    getNextPrSequenceFromRecords,
+} from "../modules/utils/daily-sequence.js";
+
+test("regular P&R sequence uses 001 through 200 only", () => {
+    assert.equal(
+        getNextPrSequenceFromRecords([
+            {
+                unitNumber: "AD261450199",
+                productLine: "P&R",
+                sourceGroup: "dryer",
+            },
+        ]),
+        200,
+    );
+
+    assert.equal(
+        getNextPrSequenceFromRecords([
+            {
+                unitNumber: "AD261450200",
+                productLine: "P&R",
+                sourceGroup: "dryer",
+            },
+        ]),
+        null,
+    );
+});
+
+test("Bags sequence starts at 201 and is shared across compound A/B lines", () => {
+    assert.equal(getNextCompoundBagsSequenceFromRecords([]), 201);
+
+    assert.equal(
+        getNextCompoundBagsSequenceFromRecords([
+            {
+                unitNumber: "AC261450201",
+                product: "NYLENE BAGS",
+                sourceGroup: "compound",
+                sourceLetter: "A",
+            },
+            {
+                unitNumber: "BC261450202",
+                product: "NYLENE BAGS",
+                sourceGroup: "compound",
+                sourceLetter: "B",
+            },
+            {
+                unitNumber: "BC261450999",
+                product: "NYLENE BAGS",
+                sourceGroup: "compound",
+                sourceLetter: "B",
+                reissueFlag: "RI",
+            },
+        ]),
+        203,
+    );
+});
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
