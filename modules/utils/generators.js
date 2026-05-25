@@ -1,9 +1,7 @@
 import {
     getNextDailySequenceFromFirebase,
-    reserveNextDailySequenceFromFirebase,
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
-    reserveNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
@@ -23,16 +21,7 @@ export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) 
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextDailySequenceFromFirebase(now);
-    const seqStr = formatSequenceSuffix(seq, "Regular P&R");
-    const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-export async function reserveUnitNumberFromFirebase(sourceGroup, sourceLetter) {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await reserveNextDailySequenceFromFirebase(now);
-    const seqStr = formatSequenceSuffix(seq, "Regular P&R");
+    const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
@@ -43,7 +32,7 @@ export async function generateCoperionUnitNumberFromFirebase() {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCoperionSequenceFromFirebase(now);
-    const seqStr = formatSequenceSuffix(seq, "Coperion");
+    const seqStr = String(seq).padStart(3, "0");
     return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
@@ -58,19 +47,7 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
-    const seqStr = formatSequenceSuffix(seq, "Bags");
-    const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-export async function reserveCompoundBagsUnitNumberFromFirebase(
-    sourceGroup,
-    sourceLetter,
-) {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await reserveNextCompoundBagsSequenceFromFirebase(now);
-    const seqStr = formatSequenceSuffix(seq, "Bags");
+    const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
@@ -111,14 +88,6 @@ function getAndIncrementDailySequence(date) {
         window.__fallbackSeq += 1;
         return window.__fallbackSeq;
     }
-}
-
-function formatSequenceSuffix(seq, label) {
-    const num = Number(seq);
-    if (!Number.isFinite(num)) {
-        throw new Error(`${label} box numbers are exhausted for today.`);
-    }
-    return String(num).padStart(3, "0");
 }
 
 // Commit the currently displayed unit number by incrementing the stored daily sequence.

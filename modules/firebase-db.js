@@ -16,13 +16,8 @@ import {
     get,
     set,
     onValue,
-    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
-    BAGS_SEQUENCE_START,
-    LABEL_SEQUENCE_MAX,
-    PR_SEQUENCE_MAX,
-    PR_SEQUENCE_START,
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
@@ -188,34 +183,27 @@ export async function fetchAllPrintsFromFirebase() {
 // Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits } = dayContext;
+    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
+        getLabelDayContext(date);
 
-    // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
+  // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
     // including legacy labels whose year digits were generated differently.
     const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
 
-    const records = await fetchRecordsForLabelDay(db, dayContext);
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    const dayKeys = new Set();
+    const startUtcKey = start.toISOString().slice(0, 10);
+    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+    dayKeys.add(localDayKey);
+    dayKeys.add(startUtcKey);
+    dayKeys.add(endUtcKey);
+
+    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+    const snaps = await Promise.all(refs.map((r) => get(r)));
+    const records = collectRecordsWithinWindow(snaps, start, end);
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
-}
-
-export async function reserveNextDailySequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits } = dayContext;
-    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchRecordsForLabelDay(db, dayContext);
-    const seedNext = getNextPrSequenceFromRecords(records, {
-        coperionPrefixForDay,
-    });
-
-    return reserveSequenceFromCounter(db, dayContext.localDayKey, "pr", {
-        startAt: PR_SEQUENCE_START,
-        maxAt: PR_SEQUENCE_MAX,
-        seedNext,
-        exhaustedMessage:
-            "Regular P&R box numbers are exhausted for today before the Bags range.",
-    });
 }
 
 // Compute the next Coperion daily sequence (last three digits) for the given date
@@ -227,13 +215,25 @@ export async function reserveNextDailySequenceFromFirebase(date) {
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits } = dayContext;
+    const { start, end, dayOfYearStr, yearDigits, localDayKey } =
+        getLabelDayContext(date);
 
     // Build the EA prefix for the day: EA[YY][DDD]
     const prefix = `EA${yearDigits}${dayOfYearStr}`;
 
-    const records = await fetchRecordsForLabelDay(db, dayContext);
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
+    const dayKeys = new Set();
+    const startUtcKey = start.toISOString().slice(0, 10);
+    const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
+    dayKeys.add(localDayKey);
+    dayKeys.add(startUtcKey);
+    dayKeys.add(endUtcKey);
+
+    const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
+    const snaps = await Promise.all(refs.map((r) => get(r)));
+    const records = collectRecordsWithinWindow(snaps, start, end);
     return getNextCoperionSequenceFromRecords(records, { prefix });
 }
 
@@ -245,27 +245,11 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const records = await fetchRecordsForLabelDay(db, dayContext);
-    return getNextCompoundBagsSequenceFromRecords(records);
-}
+    const { start, end, localDayKey } = getLabelDayContext(date);
 
-export async function reserveNextCompoundBagsSequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const records = await fetchRecordsForLabelDay(db, dayContext);
-    const seedNext = getNextCompoundBagsSequenceFromRecords(records);
-
-    return reserveSequenceFromCounter(db, dayContext.localDayKey, "bags", {
-        startAt: BAGS_SEQUENCE_START,
-        maxAt: LABEL_SEQUENCE_MAX,
-        seedNext,
-        exhaustedMessage: "Bags box numbers are exhausted for today.",
-    });
-}
-
-async function fetchRecordsForLabelDay(db, dayContext) {
-    const { start, end, localDayKey } = dayContext;
+    // Determine which buckets to read:
+    // - local day key (new writes)
+    // - UTC day keys spanning this local day (legacy writes / timezone edge)
     const dayKeys = new Set();
     const startUtcKey = start.toISOString().slice(0, 10);
     const endUtcKey = new Date(end.getTime() - 1).toISOString().slice(0, 10);
@@ -275,40 +259,8 @@ async function fetchRecordsForLabelDay(db, dayContext) {
 
     const refs = Array.from(dayKeys).map((k) => ref(db, `prints/${k}`));
     const snaps = await Promise.all(refs.map((r) => get(r)));
-    return collectRecordsWithinWindow(snaps, start, end);
-}
-
-function normalizeSequenceValue(value) {
-    const num = Number(value);
-    return Number.isFinite(num) ? Math.floor(num) : null;
-}
-
-async function reserveSequenceFromCounter(
-    db,
-    dayKey,
-    sequenceName,
-    { startAt, maxAt, seedNext, exhaustedMessage },
-) {
-    const seed = normalizeSequenceValue(seedNext);
-    if (seed === null || seed < startAt || seed > maxAt) {
-        throw new Error(exhaustedMessage);
-    }
-
-    const sequenceRef = ref(db, `labelSequences/${dayKey}/${sequenceName}`);
-    const result = await runTransaction(sequenceRef, (currentValue) => {
-        const current = normalizeSequenceValue(currentValue);
-        const next =
-            current !== null && current >= startAt
-                ? Math.max(current + 1, seed)
-                : seed;
-        return next <= maxAt ? next : undefined;
-    });
-
-    if (!result.committed) throw new Error(exhaustedMessage);
-
-    const reserved = normalizeSequenceValue(result.snapshot.val());
-    if (reserved === null) throw new Error(exhaustedMessage);
-    return reserved;
+    const records = collectRecordsWithinWindow(snaps, start, end);
+    return getNextCompoundBagsSequenceFromRecords(records);
 }
 
 function parseIsoDateOrNow(value) {
