@@ -3,6 +3,9 @@ import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
+    reserveUnitNumberFromFirebase,
+    reserveCoperionUnitNumberFromFirebase,
+    reserveCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -214,13 +217,17 @@ export function initPreviewStep() {
     async function handleInitialPrintFlow() {
         // Ensure the displayed number is based on the current product/context.
         await refreshUnitNumberIfNeeded();
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
+        if (!shouldPreserveReissueUnitNumber(state)) {
+            state.unitNumber = await reserveUnitNumberForPrint(group, letter);
+            state.__unitNumberContextKey = getUnitNumberContextKey();
+        }
         renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
         try {
             await appendLogRecord();
             appendHistoryRecord();
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
             // Save snapshot of what was printed for reprint
             const printedAt = new Date().toISOString();
             state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
@@ -329,6 +336,14 @@ export function initPreviewStep() {
                 letter,
             );
         return await generateUnitNumberFromFirebase(group, letter);
+    }
+
+    async function reserveUnitNumberForPrint(group, letter) {
+        if (state.isCoperion)
+            return await reserveCoperionUnitNumberFromFirebase();
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await reserveCompoundBagsUnitNumberFromFirebase(group, letter);
+        return await reserveUnitNumberFromFirebase(group, letter);
     }
 
     function getUnitNumberContextKey() {
