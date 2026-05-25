@@ -14,6 +14,7 @@ import {
 import {
     normalizeUnitNumber,
     parseSourceFromPrefix,
+    shouldPreserveReissueUnitNumber,
 } from "../utils/unit-number.js";
 import { buildPrintedSnapshotFromState } from "../utils/reprint-snapshot.js";
 import { splitProductDisplayLines } from "../utils/product-display.js";
@@ -343,6 +344,11 @@ export function initPreviewStep() {
 
     async function refreshUnitNumberIfNeeded(force = false) {
         const key = getUnitNumberContextKey();
+        if (shouldPreserveReissueUnitNumber(state)) {
+            state.lockUnitNumberOnce = false;
+            state.__unitNumberContextKey = key;
+            return;
+        }
         if (state.lockUnitNumberOnce) {
             state.lockUnitNumberOnce = false;
             state.__unitNumberContextKey = key;

@@ -6,6 +6,15 @@ export function normalizeUnitNumber(value) {
     return String(value || "").trim().toUpperCase();
 }
 
+export function shouldPreserveReissueUnitNumber(reissueState = {}) {
+    return (
+        Boolean(reissueState.reissueFlowType) ||
+        String(reissueState.reissueFlag || "")
+            .trim()
+            .toUpperCase() === "RI"
+    );
+}
+
 const PREFIX_TO_SOURCE = {
     // Dryer
     AD: { group: "dryer", letter: "A" },

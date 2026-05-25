@@ -5,6 +5,7 @@ import {
     buildUnitNumberFromParts,
     parseSourceFromPrefix,
     normalizeUnitNumber,
+    shouldPreserveReissueUnitNumber,
 } from "../modules/utils/unit-number.js";
 import {
     getDayOfYear,
@@ -53,6 +54,18 @@ test("buildUnitNumberFromParts replaces only the year digits after any prefix", 
 
 test("normalizeUnitNumber trims and uppercases", () => {
     assert.equal(normalizeUnitNumber(" ad25324003 "), "AD25324003");
+});
+
+test("shouldPreserveReissueUnitNumber recognizes active reissue state", () => {
+    assert.equal(
+        shouldPreserveReissueUnitNumber({ reissueFlowType: "new" }),
+        true,
+    );
+    assert.equal(
+        shouldPreserveReissueUnitNumber({ reissueFlag: "ri" }),
+        true,
+    );
+    assert.equal(shouldPreserveReissueUnitNumber({}), false);
 });
 
 test("buildUnitNumberFromParts rejects invalid day", () => {
