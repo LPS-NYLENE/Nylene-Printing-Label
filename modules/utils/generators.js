@@ -2,6 +2,9 @@ import {
     getNextDailySequenceFromFirebase,
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
+    reserveNextDailySequenceFromFirebase,
+    reserveNextCoperionSequenceFromFirebase,
+    reserveNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
@@ -26,12 +29,29 @@ export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) 
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
+export async function reserveUnitNumberFromFirebase(sourceGroup, sourceLetter) {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await reserveNextDailySequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
 // Explicit Coperion generator, to be used only for Coperion flow/screens.
 // Format: EA + last two digits of year + day-of-year (001–365/366) + suffix starting at 401
 export async function generateCoperionUnitNumberFromFirebase() {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCoperionSequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
+export async function reserveCoperionUnitNumberFromFirebase() {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await reserveNextCoperionSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
@@ -47,6 +67,18 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
+export async function reserveCompoundBagsUnitNumberFromFirebase(
+    sourceGroup,
+    sourceLetter
+) {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await reserveNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;

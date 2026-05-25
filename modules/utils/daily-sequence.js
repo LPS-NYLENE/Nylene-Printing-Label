@@ -21,8 +21,10 @@ function matchesDayPrefixIgnoringYear(unitNumber, dayPrefix) {
     if (!prefix) return false;
     if (unit.startsWith(prefix)) return true;
     if (unit.length < 7 || prefix.length < 7) return false;
-    return unit.slice(0, 2) === prefix.slice(0, 2) &&
-        unit.slice(4, 7) === prefix.slice(4, 7);
+    return (
+        unit.slice(0, 2) === prefix.slice(0, 2) &&
+        unit.slice(4, 7) === prefix.slice(4, 7)
+    );
 }
 
 function isCoperionRecord(record, coperionPrefixForDay) {
@@ -30,12 +32,22 @@ function isCoperionRecord(record, coperionPrefixForDay) {
     const unit = normalizeUnitNumber(record?.unitNumber);
     return (
         productLine === "Coperion" ||
-              matchesDayPrefixIgnoringYear(unit, coperionPrefixForDay)
-
+        matchesDayPrefixIgnoringYear(unit, coperionPrefixForDay)
     );
 }
 
 export function getNextSequenceFromRecords(
+    records,
+    { startAt = 1, includeRecord = () => true } = {},
+) {
+    const last = getLastSequenceFromRecords(records, {
+        startAt,
+        includeRecord,
+    });
+    return Math.min(999, Math.max(startAt, last + 1));
+}
+
+export function getLastSequenceFromRecords(
     records,
     { startAt = 1, includeRecord = () => true } = {},
 ) {
@@ -57,8 +69,9 @@ export function getNextSequenceFromRecords(
         }
     }
 
-    if (anyParseable) return Math.min(999, Math.max(startAt, maxSuffix + 1));
-    return Math.min(999, startAt + count);
+    if (anyParseable) return Math.max(startAt - 1, maxSuffix);
+    if (count > 0) return startAt + count - 1;
+    return startAt - 1;
 }
 
 export function getNextPrSequenceFromRecords(
@@ -66,6 +79,19 @@ export function getNextPrSequenceFromRecords(
     { coperionPrefixForDay = "" } = {},
 ) {
     return getNextSequenceFromRecords(records, {
+        startAt: 1,
+        includeRecord: (record) =>
+            !isReissueRecord(record) &&
+            !isCoperionRecord(record, coperionPrefixForDay) &&
+            !isCompoundBagsRecord(record),
+    });
+}
+
+export function getLastPrSequenceFromRecords(
+    records,
+    { coperionPrefixForDay = "" } = {},
+) {
+    return getLastSequenceFromRecords(records, {
         startAt: 1,
         includeRecord: (record) =>
             !isReissueRecord(record) &&
@@ -84,12 +110,34 @@ export function getNextCoperionSequenceFromRecords(
         includeRecord: (record) =>
             !isReissueRecord(record) &&
             normalizedPrefix &&
-             matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
+            matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
+    });
+}
+
+export function getLastCoperionSequenceFromRecords(
+    records,
+    { prefix = "" } = {},
+) {
+    const normalizedPrefix = normalizeUnitNumber(prefix);
+    return getLastSequenceFromRecords(records, {
+        startAt: 401,
+        includeRecord: (record) =>
+            !isReissueRecord(record) &&
+            normalizedPrefix &&
+            matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
     });
 }
 
 export function getNextCompoundBagsSequenceFromRecords(records) {
     return getNextSequenceFromRecords(records, {
+        startAt: 201,
+        includeRecord: (record) =>
+            !isReissueRecord(record) && isCompoundBagsRecord(record),
+    });
+}
+
+export function getLastCompoundBagsSequenceFromRecords(records) {
+    return getLastSequenceFromRecords(records, {
         startAt: 201,
         includeRecord: (record) =>
             !isReissueRecord(record) && isCompoundBagsRecord(record),
