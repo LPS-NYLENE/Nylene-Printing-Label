@@ -102,22 +102,6 @@ export function initSourceStep() {
             state.source[group] = btn.dataset.value;
             state.activeGroup = group;
             state.isCoperion = false;
-            // Regenerate the unit number to reflect the new prefix mapping (from Firebase)
-            (async () => {
-                try {
-                    const next = await generateUnitNumberFromFirebase(
-                        group,
-                        state.source[group]
-                    );
-                    state.unitNumber = next;
-                    document.dispatchEvent(new CustomEvent("updatePreview"));
-                } catch (e) {
-                    console.warn(
-                        "Failed to fetch next unit number from Firebase",
-                        e
-                    );
-                }
-            })();
             state.selectedProduct = null;
             showScreen("products");
             document.dispatchEvent(new CustomEvent("renderProductList"));

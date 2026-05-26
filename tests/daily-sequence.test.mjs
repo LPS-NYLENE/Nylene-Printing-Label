@@ -105,6 +105,25 @@ test("Compound bags sequence ignores RI labels before the first regular box of t
     assert.equal(next, 201);
 });
 
+test("Compound bags sequence continues from regular bag records only", () => {
+    const next = getNextCompoundBagsSequenceFromRecords([
+        {
+            unitNumber: "BC26145003",
+            reissueFlag: "",
+            sourceGroup: "compound",
+            product: "BX3WQ662X",
+        },
+        {
+            unitNumber: "BC26145201",
+            reissueFlag: "",
+            sourceGroup: "compound",
+            product: "BX3WQ662XBAGS",
+        },
+    ]);
+
+    assert.equal(next, 202);
+});
+
 test("P&R sequence ignores same-day Coperion prefixes when computing the next suffix", () => {
     const next = getNextPrSequenceFromRecords(
         [
