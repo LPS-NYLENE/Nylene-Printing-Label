@@ -320,6 +320,19 @@ export function initPreviewStep() {
         return code.endsWith("bags");
     }
 
+    function getUnitNumberSuffix(unitNumber) {
+        const suffix = parseInt(normalizeUnitNumber(unitNumber).slice(-3), 10);
+        return Number.isFinite(suffix) ? suffix : null;
+    }
+
+    function isUsableUnitNumberForCurrentContext(unitNumber, group, product) {
+        const suffix = getUnitNumberSuffix(unitNumber);
+        if (suffix === null) return false;
+        if (state.isCoperion) return suffix >= 401;
+        if (isCompoundBagsContext(group, product)) return suffix >= 201;
+        return true;
+    }
+
     async function getNextUnitNumberForPreview(group, letter) {
         if (state.isCoperion)
             return await generateCoperionUnitNumberFromFirebase();
@@ -344,6 +357,8 @@ export function initPreviewStep() {
 
     async function refreshUnitNumberIfNeeded(force = false) {
         const key = getUnitNumberContextKey();
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
         if (shouldPreserveReissueUnitNumber(state)) {
             state.lockUnitNumberOnce = false;
             state.__unitNumberContextKey = key;
@@ -354,14 +369,21 @@ export function initPreviewStep() {
             state.__unitNumberContextKey = key;
             return;
         }
-        if (!force && state.__unitNumberContextKey === key && state.unitNumber)
+        if (
+            !force &&
+            state.__unitNumberContextKey === key &&
+            isUsableUnitNumberForCurrentContext(
+                state.unitNumber,
+                group,
+                state.bigCode,
+            )
+        )
             return;
-        const group = state.activeGroup;
-        const letter = group ? state.source[group] : undefined;
         // If we still don't have enough context, do nothing (prevents early stale fetches).
         if (!state.isCoperion && (!group || !letter)) return;
         if (!state.isCoperion && !String(state.bigCode || "").trim()) return;
         const next = await getNextUnitNumberForPreview(group, letter);
+        if (getUnitNumberContextKey() !== key) return;
         state.unitNumber = next;
         state.__unitNumberContextKey = key;
     }
