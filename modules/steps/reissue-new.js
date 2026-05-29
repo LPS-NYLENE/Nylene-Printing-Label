@@ -177,7 +177,14 @@ export function initReissueNewFlow() {
         closeModal();
         if (state.isCoperion) {
             showScreen("coperion");
-            document.dispatchEvent(new CustomEvent("enterCoperion"));
+            document.dispatchEvent(
+                new CustomEvent("enterCoperion", {
+                    detail: {
+                        openProductSelection: true,
+                        continueToWeightsAfterProductSelection: true,
+                    },
+                }),
+            );
             return;
         }
         showScreen("products");
