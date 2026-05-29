@@ -52,6 +52,8 @@ export function initCoperionStep() {
     const cancelProductsBtn = document.getElementById("coperionCancelProducts");
     const choicesEl = document.getElementById("coperionProductChoices");
     const logoutBtn = document.getElementById("btnLogoutCoperion");
+    let continueToWeightsAfterProductSelection = false;
+
     function getCurrentSelectionContext() {
         return buildProductSelectionContext("compound", "A", true);
     }
@@ -185,21 +187,27 @@ export function initCoperionStep() {
         ctn.appendChild(b);
     }
 
-    function openModal() {
+    function openModal({ requirePassword = true, continueToWeights = false } = {}) {
         if (!modal) return;
+        continueToWeightsAfterProductSelection = continueToWeights;
         modal.classList.remove("hidden");
-        // Reset to password stage each time
-        if (stagePwd) stagePwd.classList.remove("hidden");
-        if (stageChoices) stageChoices.classList.add("hidden");
+        if (requirePassword) {
+            // Reset to password stage each time.
+            if (stagePwd) stagePwd.classList.remove("hidden");
+            if (stageChoices) stageChoices.classList.add("hidden");
+        } else {
+            showChoices();
+        }
         if (errorEl) errorEl.textContent = "";
         if (pwdInput) {
             pwdInput.value = "";
-            pwdInput.focus();
+            if (requirePassword) pwdInput.focus();
         }
     }
     function closeModal() {
         if (!modal) return;
         modal.classList.add("hidden");
+        continueToWeightsAfterProductSelection = false;
     }
 
     function showChoices() {
@@ -250,8 +258,17 @@ export function initCoperionStep() {
 
     if (doneBtn)
         doneBtn.addEventListener("click", () => {
+            const shouldContinue = continueToWeightsAfterProductSelection;
+            continueToWeightsAfterProductSelection = false;
             closeModal();
             renderDefaultProduct();
+            if (shouldContinue) {
+                state.bigCode = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
+                document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
+                showScreen("weights");
+                const gross = document.getElementById("grossWeight");
+                if (gross) gross.focus();
+            }
         });
 
     if (proceed)
@@ -278,10 +295,17 @@ export function initCoperionStep() {
         });
 
     // Initialize Coperion screen when user navigates to it
-    document.addEventListener("enterCoperion", () => {
+    document.addEventListener("enterCoperion", (event) => {
         void (async () => {
             await prepareCoperionContext();
             renderDefaultProduct();
+            if (event.detail && event.detail.openProductSelection) {
+                openModal({
+                    requirePassword: false,
+                    continueToWeights:
+                        event.detail.continueToWeightsAfterProductSelection,
+                });
+            }
         })();
     });
 }
