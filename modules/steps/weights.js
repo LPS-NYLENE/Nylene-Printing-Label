@@ -1,5 +1,6 @@
 import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
+import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
 
 export function initWeightsStep() {
     const inputNet = document.getElementById("netWeight");
@@ -42,6 +43,17 @@ export function initWeightsStep() {
         return state.weights.tareLb < 0 ? "Tare weight cannot be negative" : "";
     }
 
+    function getMaxWeightDifferenceInputError() {
+        if (!inputNet || !inputGross) return "";
+        const netRaw = String(inputNet.value ?? "").trim();
+        const grossRaw = String(inputGross.value ?? "").trim();
+        if (!netRaw || !grossRaw) return "";
+        return getMaxWeightDifferenceError(
+            state.weights.netLb,
+            state.weights.grossLb,
+        );
+    }
+
     function setWeightsError(message = "") {
         if (weightsError) weightsError.textContent = message;
     }
@@ -69,6 +81,11 @@ export function initWeightsStep() {
         const tareError = getNegativeTareError();
         if (tareError) {
             setWeightsError(tareError);
+            return;
+        }
+        const maxDifferenceError = getMaxWeightDifferenceInputError();
+        if (maxDifferenceError) {
+            setWeightsError(maxDifferenceError);
             return;
         }
         if (allWeightInputsFilled()) {
@@ -153,6 +170,12 @@ export function initWeightsStep() {
             const tareError = getNegativeTareError();
             if (tareError) {
                 setWeightsError(tareError);
+                if (inputGross) inputGross.focus();
+                return;
+            }
+            const maxDifferenceError = getMaxWeightDifferenceInputError();
+            if (maxDifferenceError) {
+                setWeightsError(maxDifferenceError);
                 if (inputGross) inputGross.focus();
                 return;
             }
