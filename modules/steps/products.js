@@ -64,8 +64,10 @@ export function initProductsStep() {
             }
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
-            const gross = document.getElementById("grossWeight");
-            if (gross) gross.focus();
+            // const gross = document.getElementById("grossWeight");
+            // if (gross) gross.focus();
+            const net = document.getElementById("netWeight");
+            if (net) net.focus();
         });
     }
 

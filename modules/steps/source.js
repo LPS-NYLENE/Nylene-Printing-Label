@@ -150,8 +150,10 @@ export function initSourceStep() {
             // Prefill default weights and go directly to weights screen (Enter Tare)
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
-            const gross = document.getElementById("grossWeight");
-            if (gross) gross.focus();
+            // const gross = document.getElementById("grossWeight");
+            // if (gross) gross.focus();
+            const net = document.getElementById("netWeight");
+            if (net) net.focus();
         });
     });
 

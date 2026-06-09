@@ -266,8 +266,10 @@ export function initCoperionStep() {
                 state.bigCode = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
                 document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
                 showScreen("weights");
-                const gross = document.getElementById("grossWeight");
-                if (gross) gross.focus();
+                // const gross = document.getElementById("grossWeight");
+                // if (gross) gross.focus();
+                const net = document.getElementById("netWeight");
+                if (net) net.focus();
             }
         });
 
@@ -277,8 +279,10 @@ export function initCoperionStep() {
             state.bigCode = state.selectedProduct || COPERION_DEFAULT_PRODUCT;
             document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
             showScreen("weights");
-            const gross = document.getElementById("grossWeight");
-            if (gross) gross.focus();
+            // const gross = document.getElementById("grossWeight");
+            // if (gross) gross.focus();
+            const net = document.getElementById("netWeight");
+            if (net) net.focus();
         });
 
     // Log out current user from Coperion screen
