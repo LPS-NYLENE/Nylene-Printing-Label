@@ -87,7 +87,8 @@ if (proceedBtn)
     proceedBtn.addEventListener("click", () => {
         prefillDefaultWeights();
         showScreen("weights");
-        document.getElementById("grossWeight").focus();
+        // document.getElementById("grossWeight").focus();
+          document.getElementById("netWeight").focus();
     });
 
 // Back from weights to products
@@ -162,7 +163,8 @@ function renderProductList() {
                 // Auto-advance to weights with defaults
                 prefillDefaultWeights();
                 showScreen("weights");
-                document.getElementById("grossWeight").focus();
+                // document.getElementById("grossWeight").focus();
+                  document.getElementById("netWeight").focus();
             });
             if (state.selectedProduct === prod) {
                 b.classList.add("selected");

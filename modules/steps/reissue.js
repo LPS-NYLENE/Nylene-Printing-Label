@@ -6,6 +6,7 @@ import {
     COPERION_PRODUCT_CHOICES,
     PR_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
+import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
 
 const REISSUE_FLAG = "RI";
 
@@ -212,7 +213,12 @@ export function initReissueFlow() {
             setEditError(tareError);
             return;
         }
-
+        const maxDifferenceError = getMaxWeightDifferenceError(net, gross);
+        if (maxDifferenceError) {
+            setEditError(maxDifferenceError);
+            return;
+        }
+        
         const sourceGroup = String(activeRecord.sourceGroup || "").toLowerCase();
         const sourceLetter = String(activeRecord.sourceLetter || "").toUpperCase();
         const originalUnit = String(activeRecord.unitNumber || "");
