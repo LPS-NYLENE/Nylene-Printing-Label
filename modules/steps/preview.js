@@ -52,8 +52,7 @@ export function initPreviewStep() {
                 return;
             }
             showScreen("weights");
-            const net = document.getElementById("netWeight");
-            if (net) net.focus();
+            document.dispatchEvent(new CustomEvent("focusNetWeight"));
         });
 
     const clear = document.getElementById("clearPreview");
