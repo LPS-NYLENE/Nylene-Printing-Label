@@ -2,19 +2,79 @@ import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
 
+const FIXED_NET_WEIGHTS = ["1800", "2204", "1102", "2204.6"];
+const PR_SOURCE_GROUPS = new Set(["silo", "dryer", "compound", "other"]);
+
 export function initWeightsStep() {
     const inputNet = document.getElementById("netWeight");
+    const selectNet = document.getElementById("netWeightSelect");
     const inputGross = document.getElementById("grossWeight");
     const inputTare = document.getElementById("tareWeight");
     let focusedInput = inputNet;
     const weightsError = document.getElementById("weightsError");
-    const weightFields = [
-        { el: inputNet, label: "net weight (lbs.)" },
-        { el: inputGross, label: "gross weight (lbs.)" },
-    ];
+    let usesFixedNetWeights = false;
+
+    function isUnextractedSource() {
+        const group = String(state.activeGroup || "").toLowerCase();
+        const special = String(state.source.special || "").toLowerCase();
+        const otherSource = String(state.source.other || "").toUpperCase();
+        return (
+            group === "other" &&
+            (special === "unextracted" || otherSource === "UX")
+        );
+    }
+
+    function shouldUseFixedNetWeights() {
+        const group = String(state.activeGroup || "").toLowerCase();
+        return (
+            !state.isCoperion &&
+            PR_SOURCE_GROUPS.has(group) &&
+            !isUnextractedSource()
+        );
+    }
+
+    function syncNetWeightMode() {
+        usesFixedNetWeights = shouldUseFixedNetWeights();
+        if (inputNet) {
+            inputNet.classList.toggle("hidden", usesFixedNetWeights);
+            inputNet.disabled = usesFixedNetWeights;
+        }
+        if (selectNet) {
+            selectNet.classList.toggle("hidden", !usesFixedNetWeights);
+            selectNet.disabled = !usesFixedNetWeights;
+        }
+        if (usesFixedNetWeights) {
+            if (
+                selectNet &&
+                inputNet &&
+                FIXED_NET_WEIGHTS.includes(String(inputNet.value || "").trim())
+            ) {
+                selectNet.value = String(inputNet.value).trim();
+            }
+            focusedInput = selectNet || inputGross || inputNet;
+        } else {
+            focusedInput = inputNet || inputGross;
+        }
+    }
+
+    function getNetControl() {
+        return usesFixedNetWeights && selectNet ? selectNet : inputNet;
+    }
+
+    function getWeightFields() {
+        return [
+            { el: getNetControl(), label: "net weight (lbs.)" },
+            { el: inputGross, label: "gross weight (lbs.)" },
+        ];
+    }
+
+    function getNetRaw() {
+        const control = getNetControl();
+        return String(control?.value ?? "").trim();
+    }
 
     function syncWeightsFromInputs() {
-        const netRaw = String(inputNet?.value ?? "").trim();
+        const netRaw = getNetRaw();
         const grossRaw = String(inputGross?.value ?? "").trim();
 
         const netLb = parseNumber(netRaw);
@@ -36,16 +96,16 @@ export function initWeightsStep() {
     }
 
     function getNegativeTareError() {
-        if (!inputNet || !inputGross) return "";
-        const netRaw = String(inputNet.value ?? "").trim();
+        if (!getNetControl() || !inputGross) return "";
+        const netRaw = getNetRaw();
         const grossRaw = String(inputGross.value ?? "").trim();
         if (!netRaw || !grossRaw) return "";
         return state.weights.tareLb < 0 ? "Tare weight cannot be negative" : "";
     }
 
     function getMaxWeightDifferenceInputError() {
-        if (!inputNet || !inputGross) return "";
-        const netRaw = String(inputNet.value ?? "").trim();
+        if (!getNetControl() || !inputGross) return "";
+        const netRaw = getNetRaw();
         const grossRaw = String(inputGross.value ?? "").trim();
         if (!netRaw || !grossRaw) return "";
         return getMaxWeightDifferenceError(
@@ -63,7 +123,7 @@ export function initWeightsStep() {
     }
 
     function findFirstEmptyWeightInput() {
-        for (const field of weightFields) {
+        for (const field of getWeightFields()) {
             const el = field.el;
             if (!el) continue;
             const value = String(el.value || "").trim();
@@ -94,23 +154,32 @@ export function initWeightsStep() {
     }
 
     function prefillDefaultWeights() {
+        syncNetWeightMode();
         if (inputNet) inputNet.value = "";
+        if (selectNet) selectNet.value = "";
         if (inputGross) inputGross.value = "";
         if (inputTare) inputTare.value = "";
-        focusedInput = inputNet
+        focusedInput = getNetControl();
         handleWeightInput();
         clearWeightsError();
     }
 
     document.addEventListener("prefillDefaultWeights", prefillDefaultWeights);
+    document.addEventListener("focusNetWeight", () => {
+        syncNetWeightMode();
+        const net = getNetControl();
+        if (net) net.focus();
+    });
 
-    weightFields.forEach(({ el, onInput }) => {
+    [inputNet, selectNet, inputGross].forEach((el) => {
         if (!el) return;
         el.addEventListener("focus", () => {
             focusedInput = el;
         });
         el.addEventListener("input", () => {
-            if (typeof onInput === "function") onInput();
+            handleWeightInput();
+        });
+        el.addEventListener("change", () => {
             handleWeightInput();
         });
     });
@@ -131,8 +200,10 @@ export function initWeightsStep() {
                 return;
             }
             if (inputNet) inputNet.value = "";
+            if (selectNet) selectNet.value = "";
             if (inputGross) inputGross.value = "";
             if (inputTare) inputTare.value = "";
+            focusedInput = getNetControl();
             handleWeightInput();
             clearWeightsError();
         });
@@ -141,6 +212,7 @@ export function initWeightsStep() {
         key.addEventListener("click", () => {
             if (!focusedInput) focusedInput = inputNet;
             if (!focusedInput) return;
+            if (focusedInput.tagName === "SELECT" || focusedInput.disabled) return;
             const label = key.textContent.trim();
             if (label === "⌫") {
                 focusedInput.value = focusedInput.value.slice(0, -1);
@@ -161,6 +233,7 @@ export function initWeightsStep() {
     const preview = document.getElementById("previewBtn");
     if (preview)
         preview.addEventListener("click", () => {
+            syncNetWeightMode();
             const missingField = findFirstEmptyWeightInput();
             if (missingField) {
                 setWeightsError(`Please enter ${missingField.label}.`);
@@ -174,7 +247,7 @@ export function initWeightsStep() {
                 if (inputGross) inputGross.focus();
                 return;
             }
-             const maxDifferenceError = getMaxWeightDifferenceInputError();
+            const maxDifferenceError = getMaxWeightDifferenceInputError();
             if (maxDifferenceError) {
                 setWeightsError(maxDifferenceError);
                 if (inputGross) inputGross.focus();
