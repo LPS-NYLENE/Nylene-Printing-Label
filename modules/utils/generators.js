@@ -4,7 +4,6 @@ import {
     getNextCompoundBagsSequenceFromFirebase,
     reserveNextDailySequenceFromFirebase,
     reserveNextCoperionSequenceFromFirebase,
-    reserveNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
@@ -60,6 +59,7 @@ export async function reserveCoperionUnitNumberFromFirebase() {
 // - sourceGroup === "compound"
 // - product code ends with "BAGS"
 // Format: (AC|BC) + last two digits of year + day-of-year (DDD) + suffix starting at 201
+// Used for both preview and print — BAGS do not reserve via the Firebase sequence counter.
 export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceGroup,
     sourceLetter
@@ -67,18 +67,6 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
-    const seqStr = String(seq).padStart(3, "0");
-    const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-export async function reserveCompoundBagsUnitNumberFromFirebase(
-    sourceGroup,
-    sourceLetter
-) {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await reserveNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
