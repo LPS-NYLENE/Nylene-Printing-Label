@@ -5,7 +5,6 @@ import {
     generateCompoundBagsUnitNumberFromFirebase,
     reserveUnitNumberFromFirebase,
     reserveCoperionUnitNumberFromFirebase,
-    reserveCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -355,8 +354,13 @@ export function initPreviewStep() {
     async function reserveUnitNumberForPrint(group, letter) {
         if (state.isCoperion)
             return await reserveCoperionUnitNumberFromFirebase();
+        // Compound BAGS: do not reserve via the Firebase sequence counter.
+        // Use the next 20x suffix from printed records only (same as preview).
         if (isCompoundBagsContext(group, state.bigCode))
-            return await reserveCompoundBagsUnitNumberFromFirebase(group, letter);
+            return await generateCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
         return await reserveUnitNumberFromFirebase(group, letter);
     }
 

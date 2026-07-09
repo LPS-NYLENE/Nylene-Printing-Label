@@ -24,7 +24,6 @@ import {
     getNextCompoundBagsSequenceFromRecords,
     getLastPrSequenceFromRecords,
     getLastCoperionSequenceFromRecords,
-    getLastCompoundBagsSequenceFromRecords,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -298,23 +297,13 @@ export async function reserveNextCoperionSequenceFromFirebase(date) {
 // - Last three digits start at 201 each new day (00:01 rule applie)
 // - Increments based on existing regular (non-RI) matching records in DB
 // - Returns the next suffix within 201..999
+// - BAGS do not use the Firebase sequence counter reservation used by P&R / Coperion;
+//   print and preview both derive the next 20x suffix from printed records only.
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCompoundBagsSequenceFromRecords(records);
-}
-
-export async function reserveNextCompoundBagsSequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCompoundBagsSequenceFromRecords(records);
-    return reserveSequenceTransaction(
-        dayContext.localDayKey,
-        "compoundBags",
-        seedLast,
-    );
 }
 
 function parseIsoDateOrNow(value) {
