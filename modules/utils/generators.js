@@ -3,10 +3,13 @@ import {
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
 <<<<<<< HEAD
+<<<<<<< HEAD
     reserveNextDailySequenceFromFirebase,
     reserveNextCoperionSequenceFromFirebase,
 =======
 >>>>>>> af11fa2ba4ff0a39e2c73d90a0999ea35de071ee
+=======
+>>>>>>> 744a81fd880843d9435c0fc6a07d6e5e3b766b1e
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
