@@ -234,6 +234,8 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 // - Last three digits start at 201 each new day (00:01 rule applie)
 // - Increments based on existing regular (non-RI) matching records in DB
 // - Returns the next suffix within 201..999
+// - BAGS do not use the Firebase sequence counter reservation used by P&R / Coperion;
+//   print and preview both derive the next 20x suffix from printed records only.
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
