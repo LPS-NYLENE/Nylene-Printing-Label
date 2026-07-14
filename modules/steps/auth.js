@@ -10,27 +10,14 @@ export function initAuthStep() {
     const pwd = document.getElementById("authPassword");
     const chkPR = document.getElementById("chkPR");
     const chkCoperion = document.getElementById("chkCoperion");
-    const chkCompoundA = document.getElementById("chkCompoundA");
-    const chkCompoundB = document.getElementById("chkCompoundB");
     const btn = document.getElementById("btnAuthLogin");
     const err = document.getElementById("authError");
 
-    if (
-        !email ||
-        !pwd ||
-        !chkPR ||
-        !chkCoperion ||
-        !chkCompoundA ||
-        !chkCompoundB ||
-        !btn
-    )
-        return;
+    if (!email || !pwd || !chkPR || !chkCoperion || !btn) return;
 
     const flowOptions = [
         { input: chkPR, flow: "pr" },
         { input: chkCoperion, flow: "cop" },
-        { input: chkCompoundA, flow: "compound-a" },
-        { input: chkCompoundB, flow: "compound-b" },
     ];
 
     function setError(msg) {
@@ -70,16 +57,6 @@ export function initAuthStep() {
             state.isCoperion = true;
             showScreen("coperion");
             document.dispatchEvent(new CustomEvent("enterCoperion"));
-        } else if (flow === "compound-a" || flow === "compound-b") {
-            state.isCoperion = false;
-            showScreen("source");
-            document.dispatchEvent(
-                new CustomEvent("configureSourceView", {
-                    detail: {
-                        compoundLine: flow === "compound-a" ? "A" : "B",
-                    },
-                })
-            );
         }
     }
 
