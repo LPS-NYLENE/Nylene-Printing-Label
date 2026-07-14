@@ -9,6 +9,8 @@ import {
     getLastCoperionSequenceFromRecords,
     getLastCompoundBagsSequenceFromRecords,
     nextClaimedSequence,
+    claimFromSequenceState,
+    releaseToSequenceState,
 } from "../modules/utils/daily-sequence.js";
 
 test("P&R sequence ignores RI labels before the first regular box of the day", () => {
@@ -259,4 +261,42 @@ test("nextClaimedSequence never skips when two callers race with the same seed",
 test("nextClaimedSequence returns null when the day is exhausted", () => {
     assert.equal(nextClaimedSequence(999, 999), null);
     assert.equal(nextClaimedSequence(null, 999), null);
+});
+
+test("claimFromSequenceState migrates legacy numeric counters", () => {
+    const step = claimFromSequenceState(5, 3);
+    assert.equal(step.ok, true);
+    assert.equal(step.claimed, 6);
+    assert.deepEqual(step.nextState, { last: 6, free: {} });
+});
+
+test("releaseToSequenceState shrinks last when cancelling the newest claim", () => {
+    const afterClaim = claimFromSequenceState({ last: 23, free: {} }, 23);
+    assert.equal(afterClaim.claimed, 24);
+    const afterRelease = releaseToSequenceState(
+        afterClaim.nextState,
+        afterClaim.claimed,
+        23,
+    );
+    assert.deepEqual(afterRelease, { last: 23, free: {} });
+    const reused = claimFromSequenceState(afterRelease, 23);
+    assert.equal(reused.claimed, 24);
+});
+
+test("releaseToSequenceState keeps a free gap when a later number was claimed", () => {
+    // A claimed 24, B claimed 25, A cancels 24.
+    let state = { last: 25, free: {} };
+    state = releaseToSequenceState(state, 24, 23);
+    assert.deepEqual(state, { last: 25, free: { "24": true } });
+    const reused = claimFromSequenceState(state, 25);
+    assert.equal(reused.claimed, 24);
+    assert.deepEqual(reused.nextState, { last: 25, free: {} });
+});
+
+test("cancelled claim is reused before advancing the counter", () => {
+    const first = claimFromSequenceState(null, 0);
+    assert.equal(first.claimed, 1);
+    const released = releaseToSequenceState(first.nextState, 1, 0);
+    const second = claimFromSequenceState(released, 0);
+    assert.equal(second.claimed, 1);
 });

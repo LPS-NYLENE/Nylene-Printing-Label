@@ -1,10 +1,10 @@
 import { state, showScreen } from "../state.js";
-import { generateUnitNumberFromFirebase } from "../utils/generators.js";
 import { getAppInstance } from "../firebase-db.js";
 import { initReissueFlow } from "./reissue.js";
 import { initReissueNewFlow } from "./reissue-new.js";
 import { buildPrintedSnapshotFromRecord } from "../utils/reprint-snapshot.js";
 import { findLatestPrintRecordByFlow } from "../utils/print-records.js";
+import { runSpecialSourceFlow } from "../utils/special-source-flow.js";
 import {
     getAuth,
     signOut,
@@ -18,9 +18,15 @@ export function initSourceStep() {
         state.lockUnitNumberOnce = false;
     }
 
+    function sourceSpecialButtons() {
+        return document.querySelectorAll("#screen-source [data-special]");
+    }
+
     function clearSourceSelection() {
         document
-            .querySelectorAll(".btn-col[data-group] .option, [data-special]")
+            .querySelectorAll(
+                "#screen-source .btn-col[data-group] .option, #screen-source [data-special]",
+            )
             .forEach((x) => x.classList.remove("selected"));
         state.source.silo = null;
         state.source.dryer = null;
@@ -31,35 +37,106 @@ export function initSourceStep() {
         state.selectedProduct = null;
     }
 
-    function applySourceView() {
+    function getLoginFlow() {
+        return localStorage.getItem("last_flow_v1") || "pr";
+    }
+
+    function compoundLineForFlow(flow = getLoginFlow()) {
+        if (flow === "compound-a") return "A";
+        if (flow === "compound-b") return "B";
+        return null;
+    }
+
+    function applySourceView(detail = {}) {
         const sourceTitle = document.getElementById("sourceTitle");
         const sourceGrid = document.getElementById("sourceGrid");
+        const flow = getLoginFlow();
+        const compoundLine =
+            detail.compoundLine === "A" || detail.compoundLine === "B"
+                ? detail.compoundLine
+                : compoundLineForFlow(flow);
+        const isCompoundOnly = Boolean(compoundLine);
 
         clearReissueState();
         clearSourceSelection();
 
         if (sourceTitle) {
-            sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
+            if (compoundLine === "A") {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR A-LINE COMPOUND :";
+            } else if (compoundLine === "B") {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR B-LINE COMPOUND :";
+            } else {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
+            }
         }
+
         if (sourceGrid) {
-            sourceGrid.classList.remove("compound-only");
+            sourceGrid.classList.toggle("compound-only", isCompoundOnly);
+            sourceGrid.classList.toggle("pr-only", !isCompoundOnly);
         }
-        // P&R includes Silo, Dryer, and Compound (A/B).
-        document.querySelectorAll("[data-source-card]").forEach((card) => {
-            card.classList.remove("hidden");
-        });
+
         document
-            .querySelectorAll('.btn-col[data-group="compound"] .option')
-            .forEach((btn) => {
-                btn.classList.remove("hidden");
+            .querySelectorAll("#screen-source [data-source-card]")
+            .forEach((card) => {
+                const kind = card.getAttribute("data-source-card");
+                if (isCompoundOnly) {
+                    card.classList.toggle("hidden", kind !== "compound");
+                } else {
+                    // P&R login: Silo / Dryer only (no Compound column).
+                    card.classList.toggle("hidden", kind === "compound");
+                }
             });
-        document.querySelectorAll("[data-special]").forEach((btn) => {
-            btn.classList.remove("hidden");
+
+        document
+            .querySelectorAll(
+                '#screen-source .btn-col[data-group="compound"] .option',
+            )
+            .forEach((btn) => {
+                const letter = String(
+                    btn.getAttribute("data-value") || "",
+                ).toUpperCase();
+                const show = isCompoundOnly && letter === compoundLine;
+                btn.classList.toggle("hidden", !show);
+                btn.classList.toggle("selected", show);
+            });
+
+        if (isCompoundOnly) {
+            state.activeGroup = "compound";
+            state.source.compound = compoundLine;
+            state.isCoperion = false;
+        }
+
+        // P&R source footer: Unextracted + Lactam (image 1).
+        // Compound A/B source screens hide these; product-screen specials are separate.
+        sourceSpecialButtons().forEach((btn) => {
+            btn.classList.toggle("hidden", isCompoundOnly);
         });
     }
 
-    document.addEventListener("configureSourceView", () => {
-        applySourceView();
+    function enterCompoundProducts(compoundLine) {
+        const line = compoundLine === "B" ? "B" : "A";
+        clearReissueState();
+        state.isCoperion = false;
+        state.activeGroup = "compound";
+        state.source.silo = null;
+        state.source.dryer = null;
+        state.source.compound = line;
+        state.source.special = null;
+        state.source.other = null;
+        state.selectedProduct = null;
+        applySourceView({ compoundLine: line });
+        showScreen("products");
+        document.dispatchEvent(new CustomEvent("renderProductList"));
+    }
+
+    document.addEventListener("configureSourceView", (event) => {
+        const detail = (event && event.detail) || {};
+        applySourceView(detail);
+        // A/B-Line login goes straight to products so Change products /
+        // Unextracted / Capro are visible immediately.
+        if (detail.enterProducts && detail.compoundLine) {
+            enterCompoundProducts(detail.compoundLine);
+        }
     });
     applySourceView();
 
@@ -91,49 +168,15 @@ export function initSourceStep() {
         });
     });
 
-    document.querySelectorAll("[data-special]").forEach((btn) => {
+    sourceSpecialButtons().forEach((btn) => {
         btn.addEventListener("click", () => {
-            clearReissueState();
-            document
-                .querySelectorAll("[data-special]")
-                .forEach((x) => x.classList.remove("selected"));
+            sourceSpecialButtons().forEach((x) =>
+                x.classList.remove("selected"),
+            );
             btn.classList.add("selected");
-            // state.source.special = btn.getAttribute("data-speciall");
-            const special = btn.getAttribute("data-special");
-            state.source.special = special;
-            // Map special to synthetic group/letter for prefix logic
-            state.activeGroup = "other";
-            if (special === "Unextracted") {
-                state.source.other = "UX";
-            } else if (special === "Lactam") {
-                state.source.other = "LT";
-            }
-            // Override displayed product name for special selections
-            if (special === "Unextracted") {
-                state.bigCode = "BS640UX";
-            } else if (special === "Lactam") {
-                state.bigCode = "Capro";
-            }
-            // Update displayed unit number with new prefix and skip product selection
-            (async () => {
-                try {
-                    const next = await generateUnitNumberFromFirebase(
-                        state.activeGroup,
-                        state.source.other
-                    );
-                    state.unitNumber = next;
-                } catch (e) {
-                    console.warn(
-                        "Failed to fetch next unit number from Firebase (special)",
-                        e
-                    );
-                }
-            })();
-            state.selectedProduct = null;
-            // Prefill default weights and go directly to weights screen (Enter Tare)
-            document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
-            showScreen("weights");
-            document.dispatchEvent(new CustomEvent("focusNetWeight"));
+            void runSpecialSourceFlow(state, btn.getAttribute("data-special"), {
+                showScreen,
+            });
         });
     });
 

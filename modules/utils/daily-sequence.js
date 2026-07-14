@@ -56,6 +56,113 @@ export function nextClaimedSequence(
     return baseLast + 1;
 }
 
+function cloneFreeMap(free) {
+    if (!free || typeof free !== "object") return {};
+    const out = {};
+    for (const [key, value] of Object.entries(free)) {
+        if (value == null || value === false) continue;
+        const num = Number(key);
+        if (!Number.isFinite(num)) continue;
+        out[String(Math.floor(num))] = true;
+    }
+    return out;
+}
+
+/**
+ * Normalize legacy numeric counters and object counters into
+ * `{ last, free }` where `free` maps reusable suffixes -> true.
+ */
+export function normalizeSequenceState(currentValue, seedLast) {
+    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
+    if (currentValue == null) {
+        return { last: seed, free: {} };
+    }
+    if (typeof currentValue === "number" || typeof currentValue === "string") {
+        const last = Number(currentValue);
+        return {
+            last: Number.isFinite(last) ? last : seed,
+            free: {},
+        };
+    }
+    if (typeof currentValue === "object") {
+        const last = Number(currentValue.last);
+        return {
+            last: Number.isFinite(last) ? last : seed,
+            free: cloneFreeMap(currentValue.free),
+        };
+    }
+    return { last: seed, free: {} };
+}
+
+function lowestFreeSuffix(free) {
+    const nums = Object.keys(free || {})
+        .map((key) => Number(key))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
+    return nums.length ? nums[0] : null;
+}
+
+/**
+ * Claim the next suffix from counter state.
+ * Prefers the lowest freed (cancelled) suffix, otherwise advances `last`.
+ * Returns `{ ok, claimed, nextState }` or `{ ok: false }`.
+ */
+export function claimFromSequenceState(
+    currentValue,
+    seedLast,
+    { maxAt = LABEL_SEQUENCE_MAX } = {},
+) {
+    const state = normalizeSequenceState(currentValue, seedLast);
+    const free = { ...state.free };
+    const fromFree = lowestFreeSuffix(free);
+    if (fromFree !== null) {
+        delete free[String(fromFree)];
+        return {
+            ok: true,
+            claimed: fromFree,
+            nextState: {
+                last: Math.max(state.last, fromFree),
+                free,
+            },
+        };
+    }
+
+    const next = nextClaimedSequence(state.last, seedLast, { maxAt });
+    if (next === null) return { ok: false };
+    return {
+        ok: true,
+        claimed: next,
+        nextState: {
+            last: next,
+            free,
+        },
+    };
+}
+
+/**
+ * Return a cancelled claim to the free list (or shrink `last` when it is
+ * still the high-water mark) so the suffix can be reused without a skip.
+ */
+export function releaseToSequenceState(currentValue, suffix, seedLast) {
+    const state = normalizeSequenceState(currentValue, seedLast);
+    const released = Number(suffix);
+    if (!Number.isFinite(released)) {
+        return { last: state.last, free: { ...state.free } };
+    }
+
+    const free = { ...state.free, [String(released)]: true };
+    let last = state.last;
+
+    // If we released the current high-water mark, shrink last so the next
+    // advance reuses it directly instead of leaving a free-list entry.
+    while (free[String(last)]) {
+        delete free[String(last)];
+        last -= 1;
+    }
+
+    return { last, free };
+}
+
 export function getNextSequenceFromRecords(
     records,
     { startAt = 1, includeRecord = () => true } = {},

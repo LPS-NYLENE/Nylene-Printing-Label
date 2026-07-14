@@ -22,13 +22,18 @@ import {
     normalizeSharedProductSelection,
     readLegacyProductSelection,
 } from "../utils/product-selection.js";
+import { runSpecialSourceFlow } from "../utils/special-source-flow.js";
 
 let unsubscribeProductSelection = () => {};
 let subscribedContextKey = null;
 
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
-    if (back) back.addEventListener("click", () => showScreen("source"));
+    if (back)
+        back.addEventListener("click", () => {
+            showScreen("source");
+            document.dispatchEvent(new CustomEvent("configureSourceView"));
+        });
 
     const proceed = document.getElementById("btnProceedWeights");
     const productsErrorEl = document.getElementById("productsError");
@@ -252,12 +257,24 @@ export function initProductsStep() {
     }
 
     function setProductSpecialButtonsUI() {
+        // Compound A: Change products + Unextracted + Capro + Continue (image 2)
+        // Compound B / other: Change products + Continue only (image 3)
         const isCompoundA =
             state.activeGroup === "compound" &&
             String(state.source.compound || "").toUpperCase() === "A";
         productSpecialButtons.forEach((btn) => {
             btn.classList.toggle("hidden", !isCompoundA);
         });
+        // Change products stays available for all non-inline product screens.
+        if (changeBtn && !isInlineSelectionMode()) {
+            changeBtn.classList.remove("hidden");
+        }
+    }
+
+    function applyProductSpecialSelection(special) {
+        // Same behavior as P&R Unextracted / Lactam: UX/LT source, skip
+        // product picking, go straight to weights.
+        void runSpecialSourceFlow(state, special, { showScreen });
     }
 
     function setProceedEnabled(enabled) {
@@ -444,6 +461,11 @@ export function initProductsStep() {
     }
 
     if (changeBtn) changeBtn.addEventListener("click", () => openModal());
+    productSpecialButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            applyProductSpecialSelection(btn.getAttribute("data-special"));
+        });
+    });
     if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal());
     if (cancelProductsBtn)
         cancelProductsBtn.addEventListener("click", () => closeModal());

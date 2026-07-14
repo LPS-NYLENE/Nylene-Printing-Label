@@ -74,6 +74,15 @@ body {
     grid-template-columns: repeat(3, 1fr);
 }
 
+.source-grid.pr-only {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.source-grid.compound-only {
+    grid-template-columns: minmax(220px, 360px);
+    justify-content: start;
+}
+
 .card {
     background: var(--card);
     border-radius: 10px;
