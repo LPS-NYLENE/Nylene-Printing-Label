@@ -41,21 +41,29 @@ export function initSourceStep() {
         return localStorage.getItem("last_flow_v1") || "pr";
     }
 
-    function applySourceView() {
+    function compoundLineForFlow(flow = getLoginFlow()) {
+        if (flow === "compound-a") return "A";
+        if (flow === "compound-b") return "B";
+        return null;
+    }
+
+    function applySourceView(detail = {}) {
         const sourceTitle = document.getElementById("sourceTitle");
         const sourceGrid = document.getElementById("sourceGrid");
         const flow = getLoginFlow();
-        const isCompoundA = flow === "compound-a";
-        const isCompoundB = flow === "compound-b";
-        const isCompoundOnly = isCompoundA || isCompoundB;
+        const compoundLine =
+            detail.compoundLine === "A" || detail.compoundLine === "B"
+                ? detail.compoundLine
+                : compoundLineForFlow(flow);
+        const isCompoundOnly = Boolean(compoundLine);
 
         clearReissueState();
         clearSourceSelection();
 
         if (sourceTitle) {
-            if (isCompoundA) {
+            if (compoundLine === "A") {
                 sourceTitle.textContent = "CHOOSE SOURCE FOR A-LINE COMPOUND :";
-            } else if (isCompoundB) {
+            } else if (compoundLine === "B") {
                 sourceTitle.textContent = "CHOOSE SOURCE FOR B-LINE COMPOUND :";
             } else {
                 sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
@@ -67,28 +75,36 @@ export function initSourceStep() {
             sourceGrid.classList.toggle("pr-only", !isCompoundOnly);
         }
 
-        document.querySelectorAll("[data-source-card]").forEach((card) => {
-            const kind = card.getAttribute("data-source-card");
-            if (isCompoundOnly) {
-                card.classList.toggle("hidden", kind !== "compound");
-            } else {
-                // P&R login: Silo / Dryer only (no Compound column).
-                card.classList.toggle("hidden", kind === "compound");
-            }
-        });
-
         document
-            .querySelectorAll('.btn-col[data-group="compound"] .option')
-            .forEach((btn) => {
-                const letter = String(btn.dataset.value || "").toUpperCase();
-                if (isCompoundA) {
-                    btn.classList.toggle("hidden", letter !== "A");
-                } else if (isCompoundB) {
-                    btn.classList.toggle("hidden", letter !== "B");
+            .querySelectorAll("#screen-source [data-source-card]")
+            .forEach((card) => {
+                const kind = card.getAttribute("data-source-card");
+                if (isCompoundOnly) {
+                    card.classList.toggle("hidden", kind !== "compound");
                 } else {
-                    btn.classList.add("hidden");
+                    // P&R login: Silo / Dryer only (no Compound column).
+                    card.classList.toggle("hidden", kind === "compound");
                 }
             });
+
+        document
+            .querySelectorAll(
+                '#screen-source .btn-col[data-group="compound"] .option',
+            )
+            .forEach((btn) => {
+                const letter = String(
+                    btn.getAttribute("data-value") || "",
+                ).toUpperCase();
+                const show = isCompoundOnly && letter === compoundLine;
+                btn.classList.toggle("hidden", !show);
+                btn.classList.toggle("selected", show);
+            });
+
+        if (isCompoundOnly) {
+            state.activeGroup = "compound";
+            state.source.compound = compoundLine;
+            state.isCoperion = false;
+        }
 
         // P&R source footer: Unextracted + Lactam (image 1).
         // Compound A/B source screens hide these; product-screen specials are separate.
@@ -97,8 +113,30 @@ export function initSourceStep() {
         });
     }
 
-    document.addEventListener("configureSourceView", () => {
-        applySourceView();
+    function enterCompoundProducts(compoundLine) {
+        const line = compoundLine === "B" ? "B" : "A";
+        clearReissueState();
+        state.isCoperion = false;
+        state.activeGroup = "compound";
+        state.source.silo = null;
+        state.source.dryer = null;
+        state.source.compound = line;
+        state.source.special = null;
+        state.source.other = null;
+        state.selectedProduct = null;
+        applySourceView({ compoundLine: line });
+        showScreen("products");
+        document.dispatchEvent(new CustomEvent("renderProductList"));
+    }
+
+    document.addEventListener("configureSourceView", (event) => {
+        const detail = (event && event.detail) || {};
+        applySourceView(detail);
+        // A/B-Line login goes straight to products so Change products /
+        // Unextracted / Capro are visible immediately.
+        if (detail.enterProducts && detail.compoundLine) {
+            enterCompoundProducts(detail.compoundLine);
+        }
     });
     applySourceView();
 

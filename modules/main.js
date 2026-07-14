@@ -70,8 +70,17 @@ function routeAfterLogin() {
         document.dispatchEvent(new CustomEvent("enterCoperion"));
         return;
     }
-    // pr | compound-a | compound-b → filtered source screen
     state.isCoperion = false;
+    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
+        const compoundLine = lastFlow === "compound-a" ? "A" : "B";
+        document.dispatchEvent(
+            new CustomEvent("configureSourceView", {
+                detail: { compoundLine, enterProducts: true },
+            }),
+        );
+        return;
+    }
+    // P&R → Silo/Dryer source screen
     showScreen("source");
     document.dispatchEvent(new CustomEvent("configureSourceView"));
 }
