@@ -252,12 +252,41 @@ export function initProductsStep() {
     }
 
     function setProductSpecialButtonsUI() {
+        // Compound A: Change products + Unextracted + Capro + Continue (image 2)
+        // Compound B / other: Change products + Continue only (image 3)
         const isCompoundA =
             state.activeGroup === "compound" &&
             String(state.source.compound || "").toUpperCase() === "A";
         productSpecialButtons.forEach((btn) => {
             btn.classList.toggle("hidden", !isCompoundA);
         });
+        // Change products stays available for all non-inline product screens.
+        if (changeBtn && !isInlineSelectionMode()) {
+            changeBtn.classList.remove("hidden");
+        }
+    }
+
+    function applyProductSpecialSelection(special) {
+        const key = String(special || "").trim();
+        let product = null;
+        if (key === "Unextracted") product = "BS640UX";
+        else if (key === "Lactam") product = "CAPRO";
+        if (!product) return;
+
+        if (isTwoSlotProductContext(state.activeGroup)) {
+            const slot =
+                state.activeProductSlot === "secondary"
+                    ? "secondary"
+                    : "primary";
+            if (slot === "primary") state.productSlots.primary = product;
+            else state.productSlots.secondary = product;
+        } else {
+            state.productSlots = { primary: product, secondary: null };
+            state.activeProductSlot = "primary";
+        }
+        syncBigCodeToActiveSlot();
+        refreshProductsUI();
+        void persistCurrentSelection();
     }
 
     function setProceedEnabled(enabled) {
@@ -444,6 +473,11 @@ export function initProductsStep() {
     }
 
     if (changeBtn) changeBtn.addEventListener("click", () => openModal());
+    productSpecialButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            applyProductSpecialSelection(btn.getAttribute("data-special"));
+        });
+    });
     if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal());
     if (cancelProductsBtn)
         cancelProductsBtn.addEventListener("click", () => closeModal());

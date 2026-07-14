@@ -18,9 +18,15 @@ export function initSourceStep() {
         state.lockUnitNumberOnce = false;
     }
 
+    function sourceSpecialButtons() {
+        return document.querySelectorAll("#screen-source [data-special]");
+    }
+
     function clearSourceSelection() {
         document
-            .querySelectorAll(".btn-col[data-group] .option, [data-special]")
+            .querySelectorAll(
+                "#screen-source .btn-col[data-group] .option, #screen-source [data-special]",
+            )
             .forEach((x) => x.classList.remove("selected"));
         state.source.silo = null;
         state.source.dryer = null;
@@ -84,9 +90,10 @@ export function initSourceStep() {
                 }
             });
 
-        // Unextracted / Lactam are compound-A specials on the source footer.
-        document.querySelectorAll("[data-special]").forEach((btn) => {
-            btn.classList.toggle("hidden", !isCompoundA);
+        // P&R source footer: Unextracted + Lactam (image 1).
+        // Compound A/B source screens hide these; product-screen specials are separate.
+        sourceSpecialButtons().forEach((btn) => {
+            btn.classList.toggle("hidden", isCompoundOnly);
         });
     }
 
@@ -123,12 +130,12 @@ export function initSourceStep() {
         });
     });
 
-    document.querySelectorAll("[data-special]").forEach((btn) => {
+    sourceSpecialButtons().forEach((btn) => {
         btn.addEventListener("click", () => {
             clearReissueState();
-            document
-                .querySelectorAll("[data-special]")
-                .forEach((x) => x.classList.remove("selected"));
+            sourceSpecialButtons().forEach((x) =>
+                x.classList.remove("selected"),
+            );
             btn.classList.add("selected");
             // state.source.special = btn.getAttribute("data-speciall");
             const special = btn.getAttribute("data-special");
