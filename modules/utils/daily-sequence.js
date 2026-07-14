@@ -36,6 +36,26 @@ function isCoperionRecord(record, coperionPrefixForDay) {
     );
 }
 
+export const LABEL_SEQUENCE_MAX = 999;
+
+/**
+ * Pure counter step used by Firebase transactions.
+ * `seedLast` is the highest already-issued suffix from print history
+ * (or startAt - 1 when none exist). Returns null when exhausted.
+ */
+export function nextClaimedSequence(
+    currentValue,
+    seedLast,
+    { maxAt = LABEL_SEQUENCE_MAX } = {},
+) {
+    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
+    const current = Number(currentValue);
+    const currentLast = Number.isFinite(current) ? current : seed;
+    const baseLast = Math.max(seed, currentLast);
+    if (baseLast >= maxAt) return null;
+    return baseLast + 1;
+}
+
 export function getNextSequenceFromRecords(
     records,
     { startAt = 1, includeRecord = () => true } = {},
@@ -44,7 +64,7 @@ export function getNextSequenceFromRecords(
         startAt,
         includeRecord,
     });
-    return Math.min(999, Math.max(startAt, last + 1));
+    return Math.min(LABEL_SEQUENCE_MAX, Math.max(startAt, last + 1));
 }
 
 export function getLastSequenceFromRecords(
@@ -74,16 +94,31 @@ export function getLastSequenceFromRecords(
     return startAt - 1;
 }
 
+function isPrPoolRecord(record, coperionPrefixForDay) {
+    return (
+        !isReissueRecord(record) &&
+        !isCoperionRecord(record, coperionPrefixForDay) &&
+        !isCompoundBagsRecord(record)
+    );
+}
+
 export function getNextPrSequenceFromRecords(
     records,
     { coperionPrefixForDay = "" } = {},
 ) {
     return getNextSequenceFromRecords(records, {
         startAt: 1,
-        includeRecord: (record) =>
-            !isReissueRecord(record) &&
-            !isCoperionRecord(record, coperionPrefixForDay) &&
-            !isCompoundBagsRecord(record),
+        includeRecord: (record) => isPrPoolRecord(record, coperionPrefixForDay),
+    });
+}
+
+export function getLastPrSequenceFromRecords(
+    records,
+    { coperionPrefixForDay = "" } = {},
+) {
+    return getLastSequenceFromRecords(records, {
+        startAt: 1,
+        includeRecord: (record) => isPrPoolRecord(record, coperionPrefixForDay),
     });
 }
 
@@ -101,8 +136,30 @@ export function getNextCoperionSequenceFromRecords(
     });
 }
 
+export function getLastCoperionSequenceFromRecords(
+    records,
+    { prefix = "" } = {},
+) {
+    const normalizedPrefix = normalizeUnitNumber(prefix);
+    return getLastSequenceFromRecords(records, {
+        startAt: 401,
+        includeRecord: (record) =>
+            !isReissueRecord(record) &&
+            normalizedPrefix &&
+            matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
+    });
+}
+
 export function getNextCompoundBagsSequenceFromRecords(records) {
     return getNextSequenceFromRecords(records, {
+        startAt: 201,
+        includeRecord: (record) =>
+            !isReissueRecord(record) && isCompoundBagsRecord(record),
+    });
+}
+
+export function getLastCompoundBagsSequenceFromRecords(records) {
+    return getLastSequenceFromRecords(records, {
         startAt: 201,
         includeRecord: (record) =>
             !isReissueRecord(record) && isCompoundBagsRecord(record),
