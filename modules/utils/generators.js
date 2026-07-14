@@ -26,7 +26,7 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
-// Preview estimate: next number from printed records only (does not claim)
+// Preview estimate: next number from printed records only (does not claim).
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
