@@ -63,21 +63,17 @@ async function bootstrap() {
 bootstrap();
 
 function routeAfterLogin() {
-    let lastFlow = localStorage.getItem("last_flow_v1") || "pr";
-    // Legacy compound login options now live under P&R source selection.
-    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
-        lastFlow = "pr";
-        localStorage.setItem("last_flow_v1", "pr");
-    }
+    const lastFlow = localStorage.getItem("last_flow_v1") || "pr";
     if (lastFlow === "cop") {
         state.isCoperion = true;
         showScreen("coperion");
         document.dispatchEvent(new CustomEvent("enterCoperion"));
-    } else {
-        state.isCoperion = false;
-        showScreen("source");
-        document.dispatchEvent(new CustomEvent("configureSourceView"));
+        return;
     }
+    // pr | compound-a | compound-b → filtered source screen
+    state.isCoperion = false;
+    showScreen("source");
+    document.dispatchEvent(new CustomEvent("configureSourceView"));
 }
 
 function setupAuthLifecycle() {

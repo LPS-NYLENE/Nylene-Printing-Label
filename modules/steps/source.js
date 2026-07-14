@@ -31,30 +31,62 @@ export function initSourceStep() {
         state.selectedProduct = null;
     }
 
+    function getLoginFlow() {
+        return localStorage.getItem("last_flow_v1") || "pr";
+    }
+
     function applySourceView() {
         const sourceTitle = document.getElementById("sourceTitle");
         const sourceGrid = document.getElementById("sourceGrid");
+        const flow = getLoginFlow();
+        const isCompoundA = flow === "compound-a";
+        const isCompoundB = flow === "compound-b";
+        const isCompoundOnly = isCompoundA || isCompoundB;
 
         clearReissueState();
         clearSourceSelection();
 
         if (sourceTitle) {
-            sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
+            if (isCompoundA) {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR A-LINE COMPOUND :";
+            } else if (isCompoundB) {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR B-LINE COMPOUND :";
+            } else {
+                sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
+            }
         }
+
         if (sourceGrid) {
-            sourceGrid.classList.remove("compound-only");
+            sourceGrid.classList.toggle("compound-only", isCompoundOnly);
+            sourceGrid.classList.toggle("pr-only", !isCompoundOnly);
         }
-        // P&R includes Silo, Dryer, and Compound (A/B).
+
         document.querySelectorAll("[data-source-card]").forEach((card) => {
-            card.classList.remove("hidden");
+            const kind = card.getAttribute("data-source-card");
+            if (isCompoundOnly) {
+                card.classList.toggle("hidden", kind !== "compound");
+            } else {
+                // P&R login: Silo / Dryer only (no Compound column).
+                card.classList.toggle("hidden", kind === "compound");
+            }
         });
+
         document
             .querySelectorAll('.btn-col[data-group="compound"] .option')
             .forEach((btn) => {
-                btn.classList.remove("hidden");
+                const letter = String(btn.dataset.value || "").toUpperCase();
+                if (isCompoundA) {
+                    btn.classList.toggle("hidden", letter !== "A");
+                } else if (isCompoundB) {
+                    btn.classList.toggle("hidden", letter !== "B");
+                } else {
+                    btn.classList.add("hidden");
+                }
             });
+
+        // Unextracted / Lactam are compound-A specials on the source footer.
         document.querySelectorAll("[data-special]").forEach((btn) => {
-            btn.classList.remove("hidden");
+            btn.classList.toggle("hidden", !isCompoundA);
         });
     }
 
