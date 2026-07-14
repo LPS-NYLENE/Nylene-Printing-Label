@@ -6,6 +6,7 @@ import {
     claimUnitNumberFromFirebase,
     claimCoperionUnitNumberFromFirebase,
     claimCompoundBagsUnitNumberFromFirebase,
+    releaseClaimedUnitNumber,
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -222,9 +223,12 @@ export function initPreviewStep() {
         await refreshUnitNumberIfNeeded();
         const group = state.activeGroup;
         const letter = group ? state.source[group] : undefined;
+        let claimedPool = null;
         if (!shouldPreserveReissueUnitNumber(state)) {
             try {
-                state.unitNumber = await claimUnitNumberForPrint(group, letter);
+                const claim = await claimUnitNumberForPrint(group, letter);
+                state.unitNumber = claim.unitNumber;
+                claimedPool = claim.pool;
                 state.__unitNumberContextKey = getUnitNumberContextKey();
             } catch (err) {
                 console.error("Failed to claim unit number for print", err);
@@ -237,6 +241,44 @@ export function initPreviewStep() {
         }
         renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
+
+        // Browsers fire afterprint for both Print and Cancel, so ask the
+        // operator whether the label actually printed before keeping the claim.
+        const printedOk = await confirmYesNo({
+            title: "Confirm print",
+            message: `Did label ${normalizeUnitNumber(state.unitNumber)} print successfully?`,
+            yesText: "Yes, printed",
+            noText: "No, cancel",
+        });
+
+        if (!printedOk) {
+            if (claimedPool) {
+                try {
+                    await releaseClaimedUnitNumber(
+                        claimedPool,
+                        state.unitNumber,
+                    );
+                } catch (err) {
+                    console.error("Failed to release cancelled label number", err);
+                    alert(
+                        "Print was cancelled, but the box number could not be returned automatically. Tell a supervisor if the next label skips a number.",
+                    );
+                }
+            }
+            try {
+                const next = await getNextUnitNumberForPreview(group, letter);
+                state.unitNumber = next;
+                state.__unitNumberContextKey = getUnitNumberContextKey();
+            } catch (e) {
+                console.warn(
+                    "Failed to refresh unit number after cancelled print",
+                    e,
+                );
+            }
+            renderPreview();
+            return;
+        }
+
         try {
             await appendLogRecord();
             appendHistoryRecord();
@@ -364,14 +406,25 @@ export function initPreviewStep() {
     }
 
     async function claimUnitNumberForPrint(group, letter) {
-        if (state.isCoperion)
-            return await claimCoperionUnitNumberFromFirebase();
-        if (isCompoundBagsContext(group, state.bigCode))
-            return await claimCompoundBagsUnitNumberFromFirebase(
-                group,
-                letter,
-            );
-        return await claimUnitNumberFromFirebase(group, letter);
+        if (state.isCoperion) {
+            return {
+                unitNumber: await claimCoperionUnitNumberFromFirebase(),
+                pool: "coperion",
+            };
+        }
+        if (isCompoundBagsContext(group, state.bigCode)) {
+            return {
+                unitNumber: await claimCompoundBagsUnitNumberFromFirebase(
+                    group,
+                    letter,
+                ),
+                pool: "bags",
+            };
+        }
+        return {
+            unitNumber: await claimUnitNumberFromFirebase(group, letter),
+            pool: "pr",
+        };
     }
 
     function getUnitNumberContextKey() {

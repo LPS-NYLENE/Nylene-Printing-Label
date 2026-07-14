@@ -24,7 +24,15 @@
       "$day": {
         "$sequence": {
           ".write": "auth != null",
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
+          ".validate": "newData.hasChildren(['last']) && newData.child('last').isNumber() && newData.child('last').val() >= 0 && newData.child('last').val() <= 999",
+          "last": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
+          },
+          "free": {
+            "$suffix": {
+              ".validate": "newData.isBoolean() && newData.val() === true"
+            }
+          }
         }
       }
     }
