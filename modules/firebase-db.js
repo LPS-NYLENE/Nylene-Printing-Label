@@ -178,7 +178,7 @@ export async function fetchAllPrintsFromFirebase() {
 
 async function fetchPrintRecordsForLabelDay(db, dayContext) {
     const { start, end, localDayKey } = dayContext;
-    // Determine which buckets to read:
+    // Determine which buckets to read
     // - local day key (new writes)
     // - UTC day keys spanning this local day (legacy writes / timezone edge)
     const dayKeys = new Set();
