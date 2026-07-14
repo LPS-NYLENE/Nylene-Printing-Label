@@ -3,11 +3,6 @@ import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
-<<<<<<< HEAD
-    reserveUnitNumberFromFirebase,
-    reserveCoperionUnitNumberFromFirebase,
-=======
->>>>>>> af11fa2ba4ff0a39e2c73d90a0999ea35de071ee
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -350,22 +345,6 @@ export function initPreviewStep() {
         return await generateUnitNumberFromFirebase(group, letter);
     }
 
-<<<<<<< HEAD
-    async function reserveUnitNumberForPrint(group, letter) {
-        if (state.isCoperion)
-            return await reserveCoperionUnitNumberFromFirebase();
-        // Compound BAGS: do not reserve via the Firebase sequence counter.
-        // Use the next 20x suffix from printed records only (same as preview).
-        if (isCompoundBagsContext(group, state.bigCode))
-            return await generateCompoundBagsUnitNumberFromFirebase(
-                group,
-                letter,
-            );
-        return await reserveUnitNumberFromFirebase(group, letter);
-    }
-
-=======
->>>>>>> af11fa2ba4ff0a39e2c73d90a0999ea35de071ee
     function getUnitNumberContextKey() {
         const group = String(state.activeGroup || "").toLowerCase();
         const letter = group ? String(state.source[group] || "") : "";
