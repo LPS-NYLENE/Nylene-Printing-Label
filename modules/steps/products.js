@@ -28,7 +28,11 @@ let subscribedContextKey = null;
 
 export function initProductsStep() {
     const back = document.getElementById("backToSource");
-    if (back) back.addEventListener("click", () => showScreen("source"));
+    if (back)
+        back.addEventListener("click", () => {
+            showScreen("source");
+            document.dispatchEvent(new CustomEvent("configureSourceView"));
+        });
 
     const proceed = document.getElementById("btnProceedWeights");
     const productsErrorEl = document.getElementById("productsError");

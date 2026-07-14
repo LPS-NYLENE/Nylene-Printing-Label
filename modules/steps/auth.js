@@ -78,6 +78,15 @@ export function initAuthStep() {
             return;
         }
         state.isCoperion = false;
+        if (flow === "compound-a" || flow === "compound-b") {
+            const compoundLine = flow === "compound-a" ? "A" : "B";
+            document.dispatchEvent(
+                new CustomEvent("configureSourceView", {
+                    detail: { compoundLine, enterProducts: true },
+                }),
+            );
+            return;
+        }
         showScreen("source");
         document.dispatchEvent(new CustomEvent("configureSourceView"));
     }
