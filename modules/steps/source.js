@@ -31,14 +31,7 @@ export function initSourceStep() {
         state.selectedProduct = null;
     }
 
-    function normalizeCompoundLine(line) {
-        const value = String(line || "").toUpperCase();
-        return value === "A" || value === "B" ? value : null;
-    }
-
-    function applySourceView(detail = {}) {
-        const compoundLine = normalizeCompoundLine(detail.compoundLine);
-        const isCompoundOnly = Boolean(compoundLine);
+    function applySourceView() {
         const sourceTitle = document.getElementById("sourceTitle");
         const sourceGrid = document.getElementById("sourceGrid");
 
@@ -46,37 +39,27 @@ export function initSourceStep() {
         clearSourceSelection();
 
         if (sourceTitle) {
-            sourceTitle.textContent = isCompoundOnly
-                ? "CHOOSE SOURCE FOR COMPOUND :"
-                : "CHOOSE SOURCE FOR P&R :";
+            sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
         }
         if (sourceGrid) {
-            sourceGrid.classList.toggle("compound-only", isCompoundOnly);
+            sourceGrid.classList.remove("compound-only");
         }
+        // P&R includes Silo, Dryer, and Compound (A/B).
         document.querySelectorAll("[data-source-card]").forEach((card) => {
-            const group = card.getAttribute("data-source-card");
-            card.classList.toggle(
-                "hidden",
-                // isCompoundOnly && group !== "compoundd"
-                isCompoundOnly ? group !== "compound" : group === "compound"
-            );
+            card.classList.remove("hidden");
         });
         document
             .querySelectorAll('.btn-col[data-group="compound"] .option')
             .forEach((btn) => {
-                btn.classList.toggle(
-                    "hidden",
-                    isCompoundOnly && btn.dataset.value !== compoundLine
-                );
+                btn.classList.remove("hidden");
             });
-        const showSpecialButtons = !isCompoundOnly || compoundLine === "A";
         document.querySelectorAll("[data-special]").forEach((btn) => {
-            btn.classList.toggle("hidden", !showSpecialButtons);
+            btn.classList.remove("hidden");
         });
     }
 
-    document.addEventListener("configureSourceView", (event) => {
-        applySourceView(event.detail || {});
+    document.addEventListener("configureSourceView", () => {
+        applySourceView();
     });
     applySourceView();
 

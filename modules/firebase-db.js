@@ -16,14 +16,11 @@ import {
     get,
     set,
     onValue,
-    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
-    getLastPrSequenceFromRecords,
-    getLastCoperionSequenceFromRecords,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -179,42 +176,6 @@ export async function fetchAllPrintsFromFirebase() {
     return rows;
 }
 
-const MAX_DAILY_SEQUENCE = 999;
-
-function makeSequenceCounterPath(localDayKey, sequenceName) {
-    return `labelSequences/${localDayKey}/${sequenceName}/last`;
-}
-
-async function reserveSequenceTransaction(localDayKey, sequenceName, seedLast) {
-    const db = getDatabaseInstance();
-    const counterRef = ref(
-        db,
-        makeSequenceCounterPath(localDayKey, sequenceName),
-    );
-    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
-    const result = await runTransaction(counterRef, (currentValue) => {
-        const current = Number(currentValue);
-        const currentLast = Number.isFinite(current) ? current : seed;
-        const baseLast = Math.max(seed, currentLast);
-        if (baseLast >= MAX_DAILY_SEQUENCE) return;
-        return baseLast + 1;
-    });
-
-    if (!result.committed) {
-        throw new Error(
-            `No ${sequenceName} label numbers remain for ${localDayKey}`,
-        );
-    }
-
-    const reserved = Number(result.snapshot.val());
-    if (!Number.isFinite(reserved)) {
-        throw new Error(
-            `Firebase did not return a reserved ${sequenceName} sequence`,
-        );
-    }
-    return reserved;
-}
-
 async function fetchPrintRecordsForLabelDay(db, dayContext) {
     const { start, end, localDayKey } = dayContext;
     // Determine which buckets to read:
@@ -249,20 +210,6 @@ export async function getNextDailySequenceFromFirebase(date) {
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
 }
 
-// Reserve the next P&R sequence atomically. The transaction is scoped to the
-// local label day and updates only the last three digits for that sequence.
-export async function reserveNextDailySequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastPrSequenceFromRecords(records, {
-        coperionPrefixForDay,
-    });
-    return reserveSequenceTransaction(localDayKey, "pr", seedLast);
-}
-
 // Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
@@ -279,16 +226,6 @@ export async function getNextCoperionSequenceFromFirebase(date) {
     const prefix = `EA${yearDigits}${dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCoperionSequenceFromRecords(records, { prefix });
-}
-
-export async function reserveNextCoperionSequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const prefix = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCoperionSequenceFromRecords(records, { prefix });
-    return reserveSequenceTransaction(localDayKey, "coperion", seedLast);
 }
 
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
