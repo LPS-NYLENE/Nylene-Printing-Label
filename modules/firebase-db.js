@@ -21,10 +21,6 @@ import {
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
-
-    getLastPrSequenceFromRecords,
-    getLastCoperionSequenceFromRecords,
-
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
