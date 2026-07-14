@@ -87,19 +87,6 @@ export function getNextPrSequenceFromRecords(
     });
 }
 
-export function getLastPrSequenceFromRecords(
-    records,
-    { coperionPrefixForDay = "" } = {},
-) {
-    return getLastSequenceFromRecords(records, {
-        startAt: 1,
-        includeRecord: (record) =>
-            !isReissueRecord(record) &&
-            !isCoperionRecord(record, coperionPrefixForDay) &&
-            !isCompoundBagsRecord(record),
-    });
-}
-
 export function getNextCoperionSequenceFromRecords(
     records,
     { prefix = "" } = {},
@@ -114,30 +101,8 @@ export function getNextCoperionSequenceFromRecords(
     });
 }
 
-export function getLastCoperionSequenceFromRecords(
-    records,
-    { prefix = "" } = {},
-) {
-    const normalizedPrefix = normalizeUnitNumber(prefix);
-    return getLastSequenceFromRecords(records, {
-        startAt: 401,
-        includeRecord: (record) =>
-            !isReissueRecord(record) &&
-            normalizedPrefix &&
-            matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
-    });
-}
-
 export function getNextCompoundBagsSequenceFromRecords(records) {
     return getNextSequenceFromRecords(records, {
-        startAt: 201,
-        includeRecord: (record) =>
-            !isReissueRecord(record) && isCompoundBagsRecord(record),
-    });
-}
-
-export function getLastCompoundBagsSequenceFromRecords(records) {
-    return getLastSequenceFromRecords(records, {
         startAt: 201,
         includeRecord: (record) =>
             !isReissueRecord(record) && isCompoundBagsRecord(record),
