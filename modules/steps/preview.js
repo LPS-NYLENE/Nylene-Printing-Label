@@ -3,8 +3,11 @@ import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
+<<<<<<< HEAD
     reserveUnitNumberFromFirebase,
     reserveCoperionUnitNumberFromFirebase,
+=======
+>>>>>>> af11fa2ba4ff0a39e2c73d90a0999ea35de071ee
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -217,17 +220,13 @@ export function initPreviewStep() {
     async function handleInitialPrintFlow() {
         // Ensure the displayed number is based on the current product/context.
         await refreshUnitNumberIfNeeded();
-        const group = state.activeGroup;
-        const letter = group ? state.source[group] : undefined;
-        if (!shouldPreserveReissueUnitNumber(state)) {
-            state.unitNumber = await reserveUnitNumberForPrint(group, letter);
-            state.__unitNumberContextKey = getUnitNumberContextKey();
-        }
         renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
         try {
             await appendLogRecord();
             appendHistoryRecord();
+            const group = state.activeGroup;
+            const letter = group ? state.source[group] : undefined;
             // Save snapshot of what was printed for reprint
             const printedAt = new Date().toISOString();
             state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
@@ -351,6 +350,7 @@ export function initPreviewStep() {
         return await generateUnitNumberFromFirebase(group, letter);
     }
 
+<<<<<<< HEAD
     async function reserveUnitNumberForPrint(group, letter) {
         if (state.isCoperion)
             return await reserveCoperionUnitNumberFromFirebase();
@@ -364,6 +364,8 @@ export function initPreviewStep() {
         return await reserveUnitNumberFromFirebase(group, letter);
     }
 
+=======
+>>>>>>> af11fa2ba4ff0a39e2c73d90a0999ea35de071ee
     function getUnitNumberContextKey() {
         const group = String(state.activeGroup || "").toLowerCase();
         const letter = group ? String(state.source[group] || "") : "";
