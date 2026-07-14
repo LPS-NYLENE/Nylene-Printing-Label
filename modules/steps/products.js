@@ -22,6 +22,7 @@ import {
     normalizeSharedProductSelection,
     readLegacyProductSelection,
 } from "../utils/product-selection.js";
+import { runSpecialSourceFlow } from "../utils/special-source-flow.js";
 
 let unsubscribeProductSelection = () => {};
 let subscribedContextKey = null;
@@ -271,26 +272,9 @@ export function initProductsStep() {
     }
 
     function applyProductSpecialSelection(special) {
-        const key = String(special || "").trim();
-        let product = null;
-        if (key === "Unextracted") product = "BS640UX";
-        else if (key === "Lactam") product = "CAPRO";
-        if (!product) return;
-
-        if (isTwoSlotProductContext(state.activeGroup)) {
-            const slot =
-                state.activeProductSlot === "secondary"
-                    ? "secondary"
-                    : "primary";
-            if (slot === "primary") state.productSlots.primary = product;
-            else state.productSlots.secondary = product;
-        } else {
-            state.productSlots = { primary: product, secondary: null };
-            state.activeProductSlot = "primary";
-        }
-        syncBigCodeToActiveSlot();
-        refreshProductsUI();
-        void persistCurrentSelection();
+        // Same behavior as P&R Unextracted / Lactam: UX/LT source, skip
+        // product picking, go straight to weights.
+        void runSpecialSourceFlow(state, special, { showScreen });
     }
 
     function setProceedEnabled(enabled) {

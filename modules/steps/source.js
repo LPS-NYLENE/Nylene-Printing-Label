@@ -1,10 +1,10 @@
 import { state, showScreen } from "../state.js";
-import { generateUnitNumberFromFirebase } from "../utils/generators.js";
 import { getAppInstance } from "../firebase-db.js";
 import { initReissueFlow } from "./reissue.js";
 import { initReissueNewFlow } from "./reissue-new.js";
 import { buildPrintedSnapshotFromRecord } from "../utils/reprint-snapshot.js";
 import { findLatestPrintRecordByFlow } from "../utils/print-records.js";
+import { runSpecialSourceFlow } from "../utils/special-source-flow.js";
 import {
     getAuth,
     signOut,
@@ -170,47 +170,13 @@ export function initSourceStep() {
 
     sourceSpecialButtons().forEach((btn) => {
         btn.addEventListener("click", () => {
-            clearReissueState();
             sourceSpecialButtons().forEach((x) =>
                 x.classList.remove("selected"),
             );
             btn.classList.add("selected");
-            // state.source.special = btn.getAttribute("data-speciall");
-            const special = btn.getAttribute("data-special");
-            state.source.special = special;
-            // Map special to synthetic group/letter for prefix logic
-            state.activeGroup = "other";
-            if (special === "Unextracted") {
-                state.source.other = "UX";
-            } else if (special === "Lactam") {
-                state.source.other = "LT";
-            }
-            // Override displayed product name for special selections
-            if (special === "Unextracted") {
-                state.bigCode = "BS640UX";
-            } else if (special === "Lactam") {
-                state.bigCode = "Capro";
-            }
-            // Update displayed unit number with new prefix and skip product selection
-            (async () => {
-                try {
-                    const next = await generateUnitNumberFromFirebase(
-                        state.activeGroup,
-                        state.source.other
-                    );
-                    state.unitNumber = next;
-                } catch (e) {
-                    console.warn(
-                        "Failed to fetch next unit number from Firebase (special)",
-                        e
-                    );
-                }
-            })();
-            state.selectedProduct = null;
-            // Prefill default weights and go directly to weights screen (Enter Tare)
-            document.dispatchEvent(new CustomEvent("prefillDefaultWeights"));
-            showScreen("weights");
-            document.dispatchEvent(new CustomEvent("focusNetWeight"));
+            void runSpecialSourceFlow(state, btn.getAttribute("data-special"), {
+                showScreen,
+            });
         });
     });
 
