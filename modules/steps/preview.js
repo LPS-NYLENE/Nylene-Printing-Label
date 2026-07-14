@@ -3,6 +3,9 @@ import {
     generateUnitNumberFromFirebase,
     generateCoperionUnitNumberFromFirebase,
     generateCompoundBagsUnitNumberFromFirebase,
+    claimUnitNumberFromFirebase,
+    claimCoperionUnitNumberFromFirebase,
+    claimCompoundBagsUnitNumberFromFirebase,
 } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
@@ -213,15 +216,30 @@ export function initPreviewStep() {
     }
 
     async function handleInitialPrintFlow() {
-        // Ensure the displayed number is based on the current product/context.
+        // Preview numbers are estimates only. Claim the real suffix at print
+        // time so multiple computers cannot take the same last-3 digits, and
+        // abandoned previews do not skip numbers.
         await refreshUnitNumberIfNeeded();
+        const group = state.activeGroup;
+        const letter = group ? state.source[group] : undefined;
+        if (!shouldPreserveReissueUnitNumber(state)) {
+            try {
+                state.unitNumber = await claimUnitNumberForPrint(group, letter);
+                state.__unitNumberContextKey = getUnitNumberContextKey();
+            } catch (err) {
+                console.error("Failed to claim unit number for print", err);
+                alert(
+                    err?.message ||
+                        "Could not claim the next box number. Check your connection and try again.",
+                );
+                return;
+            }
+        }
         renderPreview();
         await openPrintDialog(getDesiredPrintCopies());
         try {
             await appendLogRecord();
             appendHistoryRecord();
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
             // Save snapshot of what was printed for reprint
             const printedAt = new Date().toISOString();
             state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
@@ -343,6 +361,17 @@ export function initPreviewStep() {
                 letter,
             );
         return await generateUnitNumberFromFirebase(group, letter);
+    }
+
+    async function claimUnitNumberForPrint(group, letter) {
+        if (state.isCoperion)
+            return await claimCoperionUnitNumberFromFirebase();
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await claimCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
+        return await claimUnitNumberFromFirebase(group, letter);
     }
 
     function getUnitNumberContextKey() {

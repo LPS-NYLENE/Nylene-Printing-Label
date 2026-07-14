@@ -16,11 +16,17 @@ import {
     get,
     set,
     onValue,
+    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
+    LABEL_SEQUENCE_MAX,
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
+    getLastPrSequenceFromRecords,
+    getLastCoperionSequenceFromRecords,
+    getLastCompoundBagsSequenceFromRecords,
+    nextClaimedSequence,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -193,11 +199,51 @@ async function fetchPrintRecordsForLabelDay(db, dayContext) {
     return collectRecordsWithinWindow(snaps, start, end);
 }
 
+// Counter stores the last claimed suffix for a pool on a local calendar day.
+// Path: labelSequences/{YYYY-MM-DD}/{pr|coperion|compoundBags}
+function makeSequenceCounterPath(localDayKey, sequenceName) {
+    return `labelSequences/${localDayKey}/${sequenceName}`;
+}
+
+/**
+ * Atomically claim the next suffix for a pool.
+ * Seeded from printed history so we never reuse a printed number, and never
+ * advance on preview (claim happens only at print time).
+ */
+async function claimSequenceTransaction(localDayKey, sequenceName, seedLast) {
+    const db = getDatabaseInstance();
+    const counterRef = ref(
+        db,
+        makeSequenceCounterPath(localDayKey, sequenceName),
+    );
+    const result = await runTransaction(counterRef, (currentValue) => {
+        const next = nextClaimedSequence(currentValue, seedLast, {
+            maxAt: LABEL_SEQUENCE_MAX,
+        });
+        return next === null ? undefined : next;
+    });
+
+    if (!result.committed) {
+        throw new Error(
+            `No ${sequenceName} label numbers remain for ${localDayKey}`,
+        );
+    }
+
+    const claimed = Number(result.snapshot.val());
+    if (!Number.isFinite(claimed)) {
+        throw new Error(
+            `Firebase did not return a claimed ${sequenceName} sequence`,
+        );
+    }
+    return claimed;
+}
+
 // Compute the next daily sequence (last three digits) for a given date
 // by inspecting existing prints for that day in Realtime Database.
 // Buckets were historically stored under UTC day keys; we now store under local
 // day keys. For backward compatibility, we read both local and UTC buckets.
 // Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
+// Preview-only: does not claim/advance the shared counter.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
@@ -210,6 +256,19 @@ export async function getNextDailySequenceFromFirebase(date) {
     return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
 }
 
+// Claim the next P&R suffix atomically at print time (not preview).
+export async function claimNextDailySequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastPrSequenceFromRecords(records, {
+        coperionPrefixForDay,
+    });
+    return claimSequenceTransaction(localDayKey, "pr", seedLast);
+}
+
 // Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
@@ -217,6 +276,7 @@ export async function getNextDailySequenceFromFirebase(date) {
 // - Increments based on existing regular (non-RI) records in DB for the same EA day prefix,
 //   ignoring the year digits so migrated labels continue from legacy EA16DDD suffixes
 // - Returns the next suffix within 401..999
+// Preview-only: does not claim/advance the shared counter.
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
@@ -228,19 +288,40 @@ export async function getNextCoperionSequenceFromFirebase(date) {
     return getNextCoperionSequenceFromRecords(records, { prefix });
 }
 
+export async function claimNextCoperionSequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const prefix = `EA${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCoperionSequenceFromRecords(records, { prefix });
+    return claimSequenceTransaction(localDayKey, "coperion", seedLast);
+}
+
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
 // Rules:
 // - Applies only to prints where sourceGroup === "compound" AND product ends with "BAGS"
-// - Last three digits start at 201 each new day (00:01 rule applie)
+// - Last three digits start at 201 each new day (00:01 rule applies)
 // - Increments based on existing regular (non-RI) matching records in DB
 // - Returns the next suffix within 201..999
-// - BAGS do not use the Firebase sequence counter reservation used by P&R / Coperion;
-//   print and preview both derive the next 20x suffix from printed records only.
+// Preview-only: does not claim/advance the shared counter.
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCompoundBagsSequenceFromRecords(records);
+}
+
+export async function claimNextCompoundBagsSequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCompoundBagsSequenceFromRecords(records);
+    return claimSequenceTransaction(
+        dayContext.localDayKey,
+        "compoundBags",
+        seedLast,
+    );
 }
 
 function parseIsoDateOrNow(value) {
