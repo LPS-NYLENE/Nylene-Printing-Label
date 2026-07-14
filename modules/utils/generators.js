@@ -40,6 +40,7 @@ export async function generateCoperionUnitNumberFromFirebase() {
 // - sourceGroup === "compound"
 // - product code ends with "BAGS"
 // Format: (AC|BC) + last two digits of year + day-of-year (DDD) + suffix starting at 201
+// Used for both preview and print — BAGS do not reserve via the Firebase sequence counter.
 export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceGroup,
     sourceLetter
