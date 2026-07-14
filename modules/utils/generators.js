@@ -14,7 +14,7 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
-// Async variant: compute the next unit number by reading existing prints
+// Async variant: compute the next unit number by reading existing prints.
 // for today from Firebase Realtime Database instead of localStorage.
 // Resets to 001 at the start of a new UTC day (consistent with saved logs).
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
