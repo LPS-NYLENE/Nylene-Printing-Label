@@ -2,7 +2,9 @@ import {
     getNextDailySequenceFromFirebase,
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
-
+    claimNextDailySequenceFromFirebase,
+    claimNextCoperionSequenceFromFirebase,
+    claimNextCompoundBagsSequenceFromFirebase,
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
 
@@ -15,13 +17,21 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
-// Async variant: compute the next unit number by reading existing prints
-// for today from Firebase Realtime Database instead of localStorage.
-// Resets to 001 at the start of a new UTC day (consistent with saved logs).
+// Preview estimate: next number from printed records only (does not claim).
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextDailySequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
+// Print-time claim: atomically takes the next P&R suffix across all machines.
+export async function claimUnitNumberFromFirebase(sourceGroup, sourceLetter) {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await claimNextDailySequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
@@ -37,11 +47,19 @@ export async function generateCoperionUnitNumberFromFirebase() {
     return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
+export async function claimCoperionUnitNumberFromFirebase() {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await claimNextCoperionSequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
 // Explicit Compound+BAGS generator, used only when:
 // - sourceGroup === "compound"
 // - product code ends with "BAGS"
 // Format: (AC|BC) + last two digits of year + day-of-year (DDD) + suffix starting at 201
-// Used for both preview and print — BAGS do not reserve via the Firebase sequence counter.
+// Preview estimate only — print uses claimCompoundBagsUnitNumberFromFirebase.
 export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceGroup,
     sourceLetter
@@ -49,6 +67,18 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextCompoundBagsSequenceFromFirebase(now);
+    const seqStr = String(seq).padStart(3, "0");
+    const prefix = resolvePrefix(sourceGroup, sourceLetter);
+    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
+}
+
+export async function claimCompoundBagsUnitNumberFromFirebase(
+    sourceGroup,
+    sourceLetter
+) {
+    const now = new Date();
+    const dayContext = getLabelDayContext(now);
+    const seq = await claimNextCompoundBagsSequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
