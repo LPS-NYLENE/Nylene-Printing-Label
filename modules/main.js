@@ -63,7 +63,12 @@ async function bootstrap() {
 bootstrap();
 
 function routeAfterLogin() {
-    const lastFlow = localStorage.getItem("last_flow_v1") || "pr";
+    let lastFlow = localStorage.getItem("last_flow_v1") || "pr";
+    // Legacy compound-only logins map back to P&R on one computer.
+    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
+        lastFlow = "pr";
+        localStorage.setItem("last_flow_v1", "pr");
+    }
     if (lastFlow === "cop") {
         state.isCoperion = true;
         showScreen("coperion");
@@ -71,16 +76,7 @@ function routeAfterLogin() {
         return;
     }
     state.isCoperion = false;
-    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
-        const compoundLine = lastFlow === "compound-a" ? "A" : "B";
-        document.dispatchEvent(
-            new CustomEvent("configureSourceView", {
-                detail: { compoundLine, enterProducts: true },
-            }),
-        );
-        return;
-    }
-    // P&R → Silo/Dryer source screen
+    // P&R → Silo / Dryer / Compound source screen
     showScreen("source");
     document.dispatchEvent(new CustomEvent("configureSourceView"));
 }
