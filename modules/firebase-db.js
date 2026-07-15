@@ -197,7 +197,7 @@ async function fetchPrintRecordsForLabelDay(db, dayContext) {
 // by inspecting existing prints for that day in Realtime Database.
 // Buckets were historically stored under UTC day keys; we now store under local
 // day keys. For backward compatibility, we read both local and UTC buckets.
-// Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
+// Returns 1 if no prior P&R prints (including same-day reissues) exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
@@ -206,16 +206,21 @@ export async function getNextDailySequenceFromFirebase(date) {
     // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
     // including legacy labels whose year digits were generated differently.
     const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const labelDayDigits = `${yearDigits}${dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
+    return getNextPrSequenceFromRecords(records, {
+        coperionPrefixForDay,
+        labelDayDigits,
+    });
 }
 
 // Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)
-// - Increments based on existing regular (non-RI) records in DB for the same EA day prefix,
-//   ignoring the year digits so migrated labels continue from legacy EA16DDD suffixes
+// - Increments based on existing records in DB for the same EA day prefix
+//   (including same-day reissues), ignoring the year digits so migrated labels
+//   continue from legacy EA16DDD suffixes
 // - Returns the next suffix within 401..999
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
@@ -232,13 +237,14 @@ export async function getNextCoperionSequenceFromFirebase(date) {
 // Rules:
 // - Applies only to prints where sourceGroup === "compound" AND product ends with "BAGS"
 // - Last three digits start at 201 each new day (00:01 rule applies)
-// - Increments based on existing regular (non-RI) matching records in DB
+// - Increments based on existing matching records in DB (including same-day reissues)
 // - Returns the next suffix within 201..999
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
+    const labelDayDigits = `${dayContext.yearDigits}${dayContext.dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    return getNextCompoundBagsSequenceFromRecords(records);
+    return getNextCompoundBagsSequenceFromRecords(records, { labelDayDigits });
 }
 
 function parseIsoDateOrNow(value) {

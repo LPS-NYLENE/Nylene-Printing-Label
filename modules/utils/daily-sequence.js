@@ -27,6 +27,14 @@ function matchesDayPrefixIgnoringYear(unitNumber, dayPrefix) {
     );
 }
 
+function unitNumberMatchesLabelDay(unitNumber, labelDayDigits) {
+    const unit = normalizeUnitNumber(unitNumber);
+    const dayDigits = normalizeUnitNumber(labelDayDigits);
+    // Unit format: [source 2][YY 2][DDD 3][suffix 3]
+    if (!dayDigits || unit.length < 10 || dayDigits.length !== 5) return false;
+    return unit.slice(2, 7) === dayDigits;
+}
+
 function isCoperionRecord(record, coperionPrefixForDay) {
     const productLine = String(record?.productLine || "").trim();
     const unit = normalizeUnitNumber(record?.unitNumber);
@@ -76,21 +84,28 @@ export function getLastSequenceFromRecords(
     return startAt - 1;
 }
 
-function isPrPoolRecord(record, coperionPrefixForDay) {
-    return (
-        !isReissueRecord(record) &&
-        !isCoperionRecord(record, coperionPrefixForDay) &&
-        !isCompoundBagsRecord(record)
-    );
+function isPrPoolRecord(record, coperionPrefixForDay, labelDayDigits) {
+    if (isCoperionRecord(record, coperionPrefixForDay)) return false;
+    if (isCompoundBagsRecord(record)) return false;
+    // Same-day reissues still occupy a suffix (e.g. BS26196020 RI must
+    // block AC26196020). Other-day reissues of old boxes do not.
+    if (isReissueRecord(record)) {
+        return unitNumberMatchesLabelDay(record?.unitNumber, labelDayDigits);
+    }
+    return true;
 }
 
 export function getNextPrSequenceFromRecords(
     records,
-    { coperionPrefixForDay = "" } = {},
+    { coperionPrefixForDay = "", labelDayDigits = "" } = {},
 ) {
+    const dayDigits =
+        labelDayDigits ||
+        normalizeUnitNumber(coperionPrefixForDay).slice(2, 7);
     return getNextSequenceFromRecords(records, {
         startAt: 1,
-        includeRecord: (record) => isPrPoolRecord(record, coperionPrefixForDay),
+        includeRecord: (record) =>
+            isPrPoolRecord(record, coperionPrefixForDay, dayDigits),
     });
 }
 
@@ -102,16 +117,24 @@ export function getNextCoperionSequenceFromRecords(
     return getNextSequenceFromRecords(records, {
         startAt: 401,
         includeRecord: (record) =>
-            !isReissueRecord(record) &&
-            normalizedPrefix &&
+            Boolean(normalizedPrefix) &&
             matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
     });
 }
 
-export function getNextCompoundBagsSequenceFromRecords(records) {
+export function getNextCompoundBagsSequenceFromRecords(
+    records,
+    { labelDayDigits = "" } = {},
+) {
     return getNextSequenceFromRecords(records, {
         startAt: 201,
-        includeRecord: (record) =>
-            !isReissueRecord(record) && isCompoundBagsRecord(record),
+        includeRecord: (record) => {
+            if (!isCompoundBagsRecord(record)) return false;
+            if (!isReissueRecord(record)) return true;
+            return unitNumberMatchesLabelDay(
+                record?.unitNumber,
+                labelDayDigits,
+            );
+        },
     });
 }
