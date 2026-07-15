@@ -9,27 +9,14 @@ export function initAuthStep() {
     const email = document.getElementById("authEmail");
     const pwd = document.getElementById("authPassword");
     const chkPR = document.getElementById("chkPR");
-    const chkCompoundA = document.getElementById("chkCompoundA");
-    const chkCompoundB = document.getElementById("chkCompoundB");
     const chkCoperion = document.getElementById("chkCoperion");
     const btn = document.getElementById("btnAuthLogin");
     const err = document.getElementById("authError");
 
-    if (
-        !email ||
-        !pwd ||
-        !chkPR ||
-        !chkCompoundA ||
-        !chkCompoundB ||
-        !chkCoperion ||
-        !btn
-    )
-        return;
+    if (!email || !pwd || !chkPR || !chkCoperion || !btn) return;
 
     const flowOptions = [
         { input: chkPR, flow: "pr" },
-        { input: chkCompoundA, flow: "compound-a" },
-        { input: chkCompoundB, flow: "compound-b" },
         { input: chkCoperion, flow: "cop" },
     ];
 
@@ -38,7 +25,12 @@ export function initAuthStep() {
     }
 
     function restoreLastFlowCheckbox() {
-        const lastFlow = localStorage.getItem("last_flow_v1") || "";
+        let lastFlow = localStorage.getItem("last_flow_v1") || "";
+        // Legacy compound-only logins map back to P&R on one computer.
+        if (lastFlow === "compound-a" || lastFlow === "compound-b") {
+            lastFlow = "pr";
+            localStorage.setItem("last_flow_v1", "pr");
+        }
         flowOptions.forEach(({ input, flow }) => {
             input.checked = flow === lastFlow;
         });
@@ -78,15 +70,6 @@ export function initAuthStep() {
             return;
         }
         state.isCoperion = false;
-        if (flow === "compound-a" || flow === "compound-b") {
-            const compoundLine = flow === "compound-a" ? "A" : "B";
-            document.dispatchEvent(
-                new CustomEvent("configureSourceView", {
-                    detail: { compoundLine, enterProducts: true },
-                }),
-            );
-            return;
-        }
         showScreen("source");
         document.dispatchEvent(new CustomEvent("configureSourceView"));
     }
