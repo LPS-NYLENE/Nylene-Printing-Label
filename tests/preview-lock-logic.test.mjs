@@ -48,3 +48,7 @@ test("other holder can take over after stale timeout", () => {
         true,
     );
 });
+
+test("stale timeout is 30 seconds for stuck-lock recovery", () => {
+    assert.equal(PR_PREVIEW_LOCK_STALE_MS, 30 * 1000);
+});
