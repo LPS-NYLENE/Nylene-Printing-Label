@@ -46,6 +46,131 @@ function isCoperionRecord(record, coperionPrefixForDay) {
 
 export const LABEL_SEQUENCE_MAX = 999;
 
+/**
+ * Pure counter step used by Firebase transactions.
+ * `seedLast` is the highest already-issued suffix from print history
+ * (or startAt - 1 when none exist). Returns null when exhausted.
+ */
+export function nextClaimedSequence(
+    currentValue,
+    seedLast,
+    { maxAt = LABEL_SEQUENCE_MAX } = {},
+) {
+    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
+    const current = Number(currentValue);
+    const currentLast = Number.isFinite(current) ? current : seed;
+    const baseLast = Math.max(seed, currentLast);
+    if (baseLast >= maxAt) return null;
+    return baseLast + 1;
+}
+
+function cloneFreeMap(free) {
+    if (!free || typeof free !== "object") return {};
+    const out = {};
+    for (const [key, value] of Object.entries(free)) {
+        if (value == null || value === false) continue;
+        const num = Number(key);
+        if (!Number.isFinite(num)) continue;
+        out[String(Math.floor(num))] = true;
+    }
+    return out;
+}
+
+/**
+ * Normalize legacy numeric counters and object counters into
+ * `{ last, free }` where `free` maps reusable suffixes -> true.
+ */
+export function normalizeSequenceState(currentValue, seedLast) {
+    const seed = Number.isFinite(Number(seedLast)) ? Number(seedLast) : 0;
+    if (currentValue == null) {
+        return { last: seed, free: {} };
+    }
+    if (typeof currentValue === "number" || typeof currentValue === "string") {
+        const last = Number(currentValue);
+        return {
+            last: Number.isFinite(last) ? last : seed,
+            free: {},
+        };
+    }
+    if (typeof currentValue === "object") {
+        const last = Number(currentValue.last);
+        return {
+            last: Number.isFinite(last) ? last : seed,
+            free: cloneFreeMap(currentValue.free),
+        };
+    }
+    return { last: seed, free: {} };
+}
+
+function lowestFreeSuffix(free) {
+    const nums = Object.keys(free || {})
+        .map((key) => Number(key))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
+    return nums.length ? nums[0] : null;
+}
+
+/**
+ * Claim the next suffix from counter state.
+ * Prefers the lowest freed (cancelled) suffix, otherwise advances `last`.
+ * Returns `{ ok, claimed, nextState }` or `{ ok: false }`.
+ */
+export function claimFromSequenceState(
+    currentValue,
+    seedLast,
+    { maxAt = LABEL_SEQUENCE_MAX } = {},
+) {
+    const state = normalizeSequenceState(currentValue, seedLast);
+    const free = { ...state.free };
+    const fromFree = lowestFreeSuffix(free);
+    if (fromFree !== null) {
+        delete free[String(fromFree)];
+        return {
+            ok: true,
+            claimed: fromFree,
+            nextState: {
+                last: Math.max(state.last, fromFree),
+                free,
+            },
+        };
+    }
+
+    const next = nextClaimedSequence(state.last, seedLast, { maxAt });
+    if (next === null) return { ok: false };
+    return {
+        ok: true,
+        claimed: next,
+        nextState: {
+            last: next,
+            free,
+        },
+    };
+}
+
+/**
+ * Return a cancelled claim to the free list (or shrink `last` when it is
+ * still the high-water mark) so the suffix can be reused without a skip.
+ */
+export function releaseToSequenceState(currentValue, suffix, seedLast) {
+    const state = normalizeSequenceState(currentValue, seedLast);
+    const released = Number(suffix);
+    if (!Number.isFinite(released)) {
+        return { last: state.last, free: { ...state.free } };
+    }
+
+    const free = { ...state.free, [String(released)]: true };
+    let last = state.last;
+
+    // If we released the current high-water mark, shrink last so the next
+    // advance reuses it directly instead of leaving a free-list entry.
+    while (free[String(last)]) {
+        delete free[String(last)];
+        last -= 1;
+    }
+
+    return { last, free };
+}
+
 export function getNextSequenceFromRecords(
     records,
     { startAt = 1, includeRecord = () => true } = {},
@@ -109,6 +234,20 @@ export function getNextPrSequenceFromRecords(
     });
 }
 
+export function getLastPrSequenceFromRecords(
+    records,
+    { coperionPrefixForDay = "", labelDayDigits = "" } = {},
+) {
+    const dayDigits =
+        labelDayDigits ||
+        normalizeUnitNumber(coperionPrefixForDay).slice(2, 7);
+    return getLastSequenceFromRecords(records, {
+        startAt: 1,
+        includeRecord: (record) =>
+            isPrPoolRecord(record, coperionPrefixForDay, dayDigits),
+    });
+}
+
 export function getNextCoperionSequenceFromRecords(
     records,
     { prefix = "" } = {},
@@ -122,11 +261,41 @@ export function getNextCoperionSequenceFromRecords(
     });
 }
 
+export function getLastCoperionSequenceFromRecords(
+    records,
+    { prefix = "" } = {},
+) {
+    const normalizedPrefix = normalizeUnitNumber(prefix);
+    return getLastSequenceFromRecords(records, {
+        startAt: 401,
+        includeRecord: (record) =>
+            Boolean(normalizedPrefix) &&
+            matchesDayPrefixIgnoringYear(record?.unitNumber, normalizedPrefix),
+    });
+}
+
 export function getNextCompoundBagsSequenceFromRecords(
     records,
     { labelDayDigits = "" } = {},
 ) {
     return getNextSequenceFromRecords(records, {
+        startAt: 201,
+        includeRecord: (record) => {
+            if (!isCompoundBagsRecord(record)) return false;
+            if (!isReissueRecord(record)) return true;
+            return unitNumberMatchesLabelDay(
+                record?.unitNumber,
+                labelDayDigits,
+            );
+        },
+    });
+}
+
+export function getLastCompoundBagsSequenceFromRecords(
+    records,
+    { labelDayDigits = "" } = {},
+) {
+    return getLastSequenceFromRecords(records, {
         startAt: 201,
         includeRecord: (record) => {
             if (!isCompoundBagsRecord(record)) return false;

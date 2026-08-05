@@ -16,11 +16,17 @@ import {
     get,
     set,
     onValue,
+    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
+    LABEL_SEQUENCE_MAX,
+    claimFromSequenceState,
+    releaseToSequenceState,
     getNextPrSequenceFromRecords,
+    getLastPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
+    getLastCompoundBagsSequenceFromRecords,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -214,6 +220,96 @@ export async function getNextDailySequenceFromFirebase(date) {
     });
 }
 
+// Path: labelSequences/{YYYY-MM-DD}/{pr|compoundBags}
+// Shape: { last: number, free: { "24": true, ... } }
+function makeSequenceCounterPath(localDayKey, sequenceName) {
+    return `labelSequences/${localDayKey}/${sequenceName}`;
+}
+
+async function claimSequenceTransaction(localDayKey, sequenceName, seedLast) {
+    const db = getDatabaseInstance();
+    const counterRef = ref(
+        db,
+        makeSequenceCounterPath(localDayKey, sequenceName),
+    );
+    let claimed = null;
+    const result = await runTransaction(counterRef, (currentValue) => {
+        const step = claimFromSequenceState(currentValue, seedLast, {
+            maxAt: LABEL_SEQUENCE_MAX,
+        });
+        if (!step.ok) {
+            claimed = null;
+            return;
+        }
+        claimed = step.claimed;
+        return step.nextState;
+    });
+
+    if (!result.committed || !Number.isFinite(claimed)) {
+        throw new Error(
+            `No ${sequenceName} label numbers remain for ${localDayKey}`,
+        );
+    }
+    return claimed;
+}
+
+async function releaseSequenceTransaction(
+    localDayKey,
+    sequenceName,
+    suffix,
+    seedLast,
+) {
+    const db = getDatabaseInstance();
+    const counterRef = ref(
+        db,
+        makeSequenceCounterPath(localDayKey, sequenceName),
+    );
+    const released = Number(suffix);
+    if (!Number.isFinite(released)) {
+        throw new Error(`Invalid sequence suffix to release: ${suffix}`);
+    }
+
+    const result = await runTransaction(counterRef, (currentValue) =>
+        releaseToSequenceState(currentValue, released, seedLast),
+    );
+
+    if (!result.committed) {
+        throw new Error(
+            `Could not release ${sequenceName} sequence ${released} for ${localDayKey}`,
+        );
+    }
+    return released;
+}
+
+/** Atomically reserve the next P&R suffix for preview/print. */
+export async function claimNextDailySequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const labelDayDigits = `${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastPrSequenceFromRecords(records, {
+        coperionPrefixForDay,
+        labelDayDigits,
+    });
+    return claimSequenceTransaction(localDayKey, "pr", seedLast);
+}
+
+export async function releaseDailySequenceToFirebase(date, suffix) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
+    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const labelDayDigits = `${yearDigits}${dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastPrSequenceFromRecords(records, {
+        coperionPrefixForDay,
+        labelDayDigits,
+    });
+    return releaseSequenceTransaction(localDayKey, "pr", suffix, seedLast);
+}
+
 // Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
@@ -245,6 +341,38 @@ export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const labelDayDigits = `${dayContext.yearDigits}${dayContext.dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
     return getNextCompoundBagsSequenceFromRecords(records, { labelDayDigits });
+}
+
+/** Atomically reserve the next Compound+BAGS suffix for preview/print. */
+export async function claimNextCompoundBagsSequenceFromFirebase(date) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const labelDayDigits = `${dayContext.yearDigits}${dayContext.dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCompoundBagsSequenceFromRecords(records, {
+        labelDayDigits,
+    });
+    return claimSequenceTransaction(
+        dayContext.localDayKey,
+        "compoundBags",
+        seedLast,
+    );
+}
+
+export async function releaseCompoundBagsSequenceToFirebase(date, suffix) {
+    const db = getDatabaseInstance();
+    const dayContext = getLabelDayContext(date);
+    const labelDayDigits = `${dayContext.yearDigits}${dayContext.dayOfYearStr}`;
+    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
+    const seedLast = getLastCompoundBagsSequenceFromRecords(records, {
+        labelDayDigits,
+    });
+    return releaseSequenceTransaction(
+        dayContext.localDayKey,
+        "compoundBags",
+        suffix,
+        seedLast,
+    );
 }
 
 function parseIsoDateOrNow(value) {
