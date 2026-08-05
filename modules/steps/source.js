@@ -9,11 +9,6 @@ import {
     getAuth,
     signOut,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {
-    acquirePrPrintLock,
-    notifyPrintBusyAndReload,
-    releasePrPrintLockIfHeld,
-} from "../print-lock.js";
 
 export function initSourceStep() {
     function clearReissueState() {
@@ -239,16 +234,6 @@ export function initSourceStep() {
             state.isCoperion = Boolean(snap.isCoperion);
             state.previewTimestamp = snap.printedAt || snap.timestamp || null;
 
-            let holdPrintLock = false;
-            if (!isCoperion) {
-                const lock = await acquirePrPrintLock();
-                if (!lock.ok) {
-                    notifyPrintBusyAndReload(lock.message);
-                    return;
-                }
-                holdPrintLock = true;
-            }
-
             // Render the exact snapshot instead of refreshing the next lot number.
             document.dispatchEvent(new CustomEvent("renderPreviewOnly"));
             const restore = () => {
@@ -260,13 +245,8 @@ export function initSourceStep() {
                 state.isCoperion = saved.isCoperion;
                 state.previewTimestamp = saved.previewTimestamp || null;
                 window.removeEventListener("afterprint", restore);
-                const finish = async () => {
-                    if (holdPrintLock) {
-                        await releasePrPrintLockIfHeld();
-                    }
-                    window.location.reload();
-                };
-                void finish();
+                // Reload the app after printing completes
+                window.location.reload();
             };
             window.addEventListener("afterprint", restore, { once: true });
             window.print();
