@@ -22,9 +22,10 @@ import { splitProductDisplayLines } from "../utils/product-display.js";
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
 import {
-    enterPreviewWithLock,
-    releasePrPreviewLockIfHeld,
-} from "../preview-lock.js";
+    acquirePrPrintLock,
+    notifyPrintBusyAndReload,
+    releasePrPrintLockIfHeld,
+} from "../print-lock.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -141,23 +142,58 @@ export function initPreviewStep() {
 
     const printBtn = document.getElementById("printBtn");
     let printInFlight = false;
+
+    function setPrintButtonLoading(isLoading) {
+        if (!printBtn) return;
+        if (isLoading) {
+            if (!printBtn.dataset.defaultLabel) {
+                printBtn.dataset.defaultLabel = printBtn.textContent || "Print";
+            }
+            printBtn.disabled = true;
+            printBtn.setAttribute("aria-busy", "true");
+            printBtn.innerHTML =
+                '<span class="btn-loading-label"><span class="btn-spinner" aria-hidden="true"></span><span>Printing...</span></span>';
+            return;
+        }
+        printBtn.disabled = false;
+        printBtn.removeAttribute("aria-busy");
+        printBtn.textContent = printBtn.dataset.defaultLabel || "Print";
+    }
+
     if (printBtn)
         printBtn.addEventListener("click", async () => {
-            if (printInFlight) return;
+            if (printInFlight || printBtn.disabled) return;
             printInFlight = true;
+            setPrintButtonLoading(true);
+            let acquiredPrintLock = false;
             try {
+                // Serialize P&R prints across workstations (Coperion is single-station).
+                if (!state.isCoperion) {
+                    const lock = await acquirePrPrintLock();
+                    if (!lock.ok) {
+                        notifyPrintBusyAndReload(lock.message);
+                        return;
+                    }
+                    acquiredPrintLock = true;
+                }
                 if (state.reprintAvailable && state.lastPrinted) {
-                    await handleReprintFlow();
+                    await handleReprintFlow({ holdPrintLock: acquiredPrintLock });
                     return;
                 }
-                await handleInitialPrintFlow();
+                await handleInitialPrintFlow({
+                    holdPrintLock: acquiredPrintLock,
+                });
             } catch (err) {
                 console.error("Failed to start printing", err);
                 alert(
                     "Printing could not be started. Please check your browser settings and try again.",
                 );
+                if (acquiredPrintLock) {
+                    await releasePrPrintLockIfHeld();
+                }
             } finally {
                 printInFlight = false;
+                setPrintButtonLoading(false);
             }
         });
 
@@ -212,26 +248,19 @@ export function initPreviewStep() {
         state.reissueOriginalUnit = previous || unit;
         state.reissueFlowType = "new";
 
-        const previewEntry = await enterPreviewWithLock({ isCoperion: false });
-        if (!previewEntry.ok) {
-            alert(previewEntry.message);
-            return;
-        }
         document.dispatchEvent(new CustomEvent("updatePreview"));
+        showScreen("preview");
     }
 
-    async function handleInitialPrintFlow() {
-        // Always release the P&R preview lock when leaving this flow so other
-        // stations are not stuck on "One station currently busy".
+    async function handleInitialPrintFlow({ holdPrintLock = false } = {}) {
         try {
-            // Refresh from printed history right before printing (no reservation).
+            // Refresh from printed history right before printing (no advance reservation).
             await refreshUnitNumberIfNeeded(true);
             renderPreview();
             await openPrintDialog(getDesiredPrintCopies());
             try {
                 await appendLogRecord();
                 appendHistoryRecord();
-                // Save snapshot of what was printed for reprint
                 const printedAt = new Date().toISOString();
                 state.lastPrinted = buildPrintedSnapshotFromState(
                     state,
@@ -245,12 +274,14 @@ export function initPreviewStep() {
                 renderPreview();
             }
         } finally {
-            await releasePrPreviewLockIfHeld();
+            if (holdPrintLock) {
+                await releasePrPrintLockIfHeld();
+            }
             window.location.reload();
         }
     }
 
-    async function handleReprintFlow() {
+    async function handleReprintFlow({ holdPrintLock = false } = {}) {
         const previous = {
             unitNumber: state.unitNumber,
             bigCode: state.bigCode,
@@ -291,7 +322,9 @@ export function initPreviewStep() {
             if (printError) throw printError;
             state.reprintAvailable = false;
         } finally {
-            await releasePrPreviewLockIfHeld();
+            if (holdPrintLock) {
+                await releasePrPrintLockIfHeld();
+            }
             window.location.reload();
         }
     }
@@ -400,7 +433,7 @@ export function initPreviewStep() {
     async function handleUpdatePreview() {
         try {
             // Always re-read from printed history when opening/updating preview
-            // so stations never keep a stale estimated suffix.
+            // so a station retrying after the busy wait gets the next suffix.
             await refreshUnitNumberIfNeeded(true);
         } catch (e) {
             console.warn("Failed to refresh unit number for preview", e);
