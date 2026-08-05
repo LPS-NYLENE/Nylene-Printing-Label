@@ -221,37 +221,46 @@ export function initPreviewStep() {
     }
 
     async function handleInitialPrintFlow() {
-        // Single station: use the preview number from printed records.
-        await refreshUnitNumberIfNeeded();
-        renderPreview();
-        await openPrintDialog(getDesiredPrintCopies());
+        // Always release the P&R preview lock when leaving this flow so other
+        // stations are not stuck on "One station currently busy".
         try {
-            await appendLogRecord();
-            appendHistoryRecord();
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
-            // Save snapshot of what was printed for reprint
-            const printedAt = new Date().toISOString();
-            state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
-            state.reprintAvailable = true;
-            // Prepare next displayed number by reading from Firebase
-            try {
-                const next = await getNextUnitNumberForPreview(group, letter);
-                state.unitNumber = next;
-            } catch (e) {
-                console.warn(
-                    "Failed to refresh next unit number from Firebase",
-                    e,
-                );
-            }
-        } catch (err) {
-            console.error("Log append failed after print", err);
-            alert("Saving log failed after printing.");
-        } finally {
+            // Single station: use the preview number from printed records.
+            await refreshUnitNumberIfNeeded();
             renderPreview();
-            // Release P&R preview lock before reload so other stations can continue.
+            await openPrintDialog(getDesiredPrintCopies());
+            try {
+                await appendLogRecord();
+                appendHistoryRecord();
+                const group = state.activeGroup;
+                const letter = group ? state.source[group] : undefined;
+                // Save snapshot of what was printed for reprint
+                const printedAt = new Date().toISOString();
+                state.lastPrinted = buildPrintedSnapshotFromState(
+                    state,
+                    printedAt,
+                );
+                state.reprintAvailable = true;
+                // Prepare next displayed number by reading from Firebase
+                try {
+                    const next = await getNextUnitNumberForPreview(
+                        group,
+                        letter,
+                    );
+                    state.unitNumber = next;
+                } catch (e) {
+                    console.warn(
+                        "Failed to refresh next unit number from Firebase",
+                        e,
+                    );
+                }
+            } catch (err) {
+                console.error("Log append failed after print", err);
+                alert("Saving log failed after printing.");
+            } finally {
+                renderPreview();
+            }
+        } finally {
             await releasePrPreviewLockIfHeld();
-            // Reload the app after printing completes
             window.location.reload();
         }
     }
@@ -293,10 +302,13 @@ export function initPreviewStep() {
             state.previewTimestamp = previous.previewTimestamp;
             renderPreview();
         }
-        if (printError) throw printError;
-        state.reprintAvailable = false;
-        await releasePrPreviewLockIfHeld();
-        window.location.reload();
+        try {
+            if (printError) throw printError;
+            state.reprintAvailable = false;
+        } finally {
+            await releasePrPreviewLockIfHeld();
+            window.location.reload();
+        }
     }
 
     const openDbBtn = document.getElementById("openLabelDb");

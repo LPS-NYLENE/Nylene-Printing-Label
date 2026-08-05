@@ -1,7 +1,7 @@
 export const PR_PREVIEW_BUSY_MESSAGE = "One station currently busy";
 
 /** Max age of a lock heartbeat before another station may take over. */
-export const PR_PREVIEW_LOCK_STALE_MS = 60 * 1000;
+export const PR_PREVIEW_LOCK_STALE_MS = 30 * 1000;
 
 /**
  * Decide whether `holderId` may claim the P&R preview lock.
