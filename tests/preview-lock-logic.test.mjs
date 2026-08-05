@@ -5,6 +5,7 @@ import {
     PR_PREVIEW_BUSY_MESSAGE,
     PR_PREVIEW_LOCK_STALE_MS,
     canClaimPrPreviewLock,
+    isPrPreviewLockStale,
 } from "../modules/utils/preview-lock-logic.js";
 
 test("busy message matches operator-facing copy", () => {
@@ -49,6 +50,10 @@ test("other holder can take over after stale timeout", () => {
     );
 });
 
-test("stale timeout is 30 seconds for stuck-lock recovery", () => {
-    assert.equal(PR_PREVIEW_LOCK_STALE_MS, 30 * 1000);
+test("stale timeout is 20 seconds for stuck-lock recovery", () => {
+    assert.equal(PR_PREVIEW_LOCK_STALE_MS, 20 * 1000);
+});
+
+test("isPrPreviewLockStale treats missing timestamps as stale", () => {
+    assert.equal(isPrPreviewLockStale({ holderId: "a" }, 5000), true);
 });
