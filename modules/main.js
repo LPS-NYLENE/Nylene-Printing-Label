@@ -70,10 +70,10 @@ function routeAfterLogin() {
         document.dispatchEvent(new CustomEvent("enterCoperion"));
         return;
     }
-    // Clear any leftover P&R preview lock from a previous page life-cycle
+    // Clear any leftover P&R print lock from a previous page life-cycle
     // (print reload / crashed tab) so other stations are not stuck busy.
-    void import("./preview-lock.js")
-        .then((m) => m.clearOwnPrPreviewLockOnStartup())
+    void import("./print-lock.js")
+        .then((m) => m.clearOwnPrPrintLockOnStartup())
         .catch(() => {});
     // pr | compound-a | compound-b → filtered source screen
     state.isCoperion = false;

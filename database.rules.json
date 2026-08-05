@@ -54,6 +54,25 @@
           ".validate": false
         }
       }
+    },
+    "printLocks": {
+      ".read": "auth != null",
+      "pr": {
+        ".write": "auth != null",
+        ".validate": "!newData.exists() || newData.hasChildren(['holderId', 'heldAt', 'renewedAt'])",
+        "holderId": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128"
+        },
+        "heldAt": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "renewedAt": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }
