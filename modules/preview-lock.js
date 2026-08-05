@@ -21,6 +21,7 @@ const HOLDER_STORAGE_KEY = "pr_preview_lock_holder_v1";
 const HEARTBEAT_MS = 8 * 1000;
 const BUSY_RETRY_ATTEMPTS = 4;
 const BUSY_RETRY_DELAY_MS = 700;
+const BUSY_RELOAD_MS = 5 * 1000;
 
 let heartbeatTimer = null;
 let pageHideBound = false;
@@ -315,6 +316,24 @@ export async function enterPreviewWithLock(options = {}) {
     }
     showScreen("preview");
     return { ok: true };
+}
+
+/**
+ * Show the busy message and reload after 5 seconds so this station can retry
+ * once the other workstation leaves Preview.
+ */
+export function notifyPreviewBusyAndReload(
+    message = PR_PREVIEW_BUSY_MESSAGE,
+) {
+    // Start the timer before alert so the 5s countdown is not blocked by the dialog.
+    setTimeout(() => {
+        window.location.reload();
+    }, BUSY_RELOAD_MS);
+    try {
+        alert(message);
+    } catch {
+        // ignore environments without alert
+    }
 }
 
 export { PR_PREVIEW_BUSY_MESSAGE };

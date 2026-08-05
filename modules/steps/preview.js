@@ -23,6 +23,7 @@ import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
 import {
     enterPreviewWithLock,
+    notifyPreviewBusyAndReload,
     releasePrPreviewLockIfHeld,
 } from "../preview-lock.js";
 
@@ -214,7 +215,7 @@ export function initPreviewStep() {
 
         const previewEntry = await enterPreviewWithLock({ isCoperion: false });
         if (!previewEntry.ok) {
-            alert(previewEntry.message);
+            notifyPreviewBusyAndReload(previewEntry.message);
             return;
         }
         document.dispatchEvent(new CustomEvent("updatePreview"));
@@ -222,7 +223,7 @@ export function initPreviewStep() {
 
     async function handleInitialPrintFlow() {
         // Always release the P&R preview lock when leaving this flow so other
-        // stations are not stuck on "One station currently busy".
+        // stations are not stuck on the busy wait.
         try {
             // Refresh from printed history right before printing (no reservation).
             await refreshUnitNumberIfNeeded(true);

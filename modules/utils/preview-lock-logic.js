@@ -1,4 +1,5 @@
-export const PR_PREVIEW_BUSY_MESSAGE = "One station currently busy";
+export const PR_PREVIEW_BUSY_MESSAGE =
+    "One station is currently busy. Please wait...";
 
 /** Max age of a lock heartbeat before another station may take over. */
 export const PR_PREVIEW_LOCK_STALE_MS = 20 * 1000;
