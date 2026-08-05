@@ -1,5 +1,9 @@
 import { state, showScreen } from "../state.js";
-import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
+import {
+    generateUnitNumberFromFirebase,
+    generateCoperionUnitNumberFromFirebase,
+    generateCompoundBagsUnitNumberFromFirebase,
+} from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
 import {
@@ -21,11 +25,6 @@ import {
     enterPreviewWithLock,
     releasePrPreviewLockIfHeld,
 } from "../preview-lock.js";
-import {
-    commitPrReservation,
-    getActiveReservation,
-    reserveUnitNumberForPreview,
-} from "../sequence-reservation.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -225,8 +224,8 @@ export function initPreviewStep() {
         // Always release the P&R preview lock when leaving this flow so other
         // stations are not stuck on "One station currently busy".
         try {
-            // Use the reserved preview number (claimed when entering Preview).
-            await refreshUnitNumberIfNeeded();
+            // Refresh from printed history right before printing (no reservation).
+            await refreshUnitNumberIfNeeded(true);
             renderPreview();
             await openPrintDialog(getDesiredPrintCopies());
             try {
@@ -239,8 +238,6 @@ export function initPreviewStep() {
                     printedAt,
                 );
                 state.reprintAvailable = true;
-                // Keep the reserved suffix consumed so the next station gets N+1.
-                commitPrReservation();
             } catch (err) {
                 console.error("Log append failed after print", err);
                 alert("Saving log failed after printing.");
@@ -248,7 +245,6 @@ export function initPreviewStep() {
                 renderPreview();
             }
         } finally {
-            // If print/log failed, lock release frees the reservation for reuse.
             await releasePrPreviewLockIfHeld();
             window.location.reload();
         }
@@ -349,14 +345,12 @@ export function initPreviewStep() {
     async function getNextUnitNumberForPreview(group, letter) {
         if (state.isCoperion)
             return await generateCoperionUnitNumberFromFirebase();
-        // P&R / BAGS: atomically reserve so another station cannot show the same suffix.
-        const key = getUnitNumberContextKey();
-        return await reserveUnitNumberForPreview({
-            group,
-            letter,
-            product: state.bigCode,
-            contextKey: key,
-        });
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await generateCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
+        return await generateUnitNumberFromFirebase(group, letter);
     }
 
     function getUnitNumberContextKey() {
@@ -384,13 +378,9 @@ export function initPreviewStep() {
             state.__unitNumberContextKey = key;
             return;
         }
-        const hasMatchingReservation =
-            state.isCoperion ||
-            getActiveReservation()?.contextKey === key;
         if (
             !force &&
             state.__unitNumberContextKey === key &&
-            hasMatchingReservation &&
             isUsableUnitNumberForCurrentContext(
                 state.unitNumber,
                 group,
@@ -409,7 +399,9 @@ export function initPreviewStep() {
 
     async function handleUpdatePreview() {
         try {
-            await refreshUnitNumberIfNeeded();
+            // Always re-read from printed history when opening/updating preview
+            // so stations never keep a stale estimated suffix.
+            await refreshUnitNumberIfNeeded(true);
         } catch (e) {
             console.warn("Failed to refresh unit number for preview", e);
         }
