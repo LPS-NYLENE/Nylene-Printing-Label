@@ -8,12 +8,13 @@ import {
     onValue,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getAppInstance } from "./firebase-db.js";
-import { showScreen } from "./state.js";
+import { showScreen, screens } from "./state.js";
 import {
     PR_PREVIEW_BUSY_MESSAGE,
     PR_PREVIEW_LOCK_STALE_MS,
     canClaimPrPreviewLock,
     isPrPreviewLockStale,
+    shouldRemoveLockForHolder,
 } from "./utils/preview-lock-logic.js";
 
 const PR_PREVIEW_LOCK_PATH = "previewLocks/pr";
@@ -22,14 +23,17 @@ const HEARTBEAT_MS = 8 * 1000;
 const BUSY_RETRY_ATTEMPTS = 4;
 const BUSY_RETRY_DELAY_MS = 700;
 const BUSY_RELOAD_MS = 5 * 1000;
+const SERVER_TIME_WAIT_MS = 1500;
 
 let heartbeatTimer = null;
 let pageHideBound = false;
+let visibilityBound = false;
 let heldByUs = false;
 let releaseEpoch = 0;
 let disconnectConfigured = false;
 let serverTimeOffsetMs = 0;
 let serverTimeReady = false;
+let serverTimeWaiter = null;
 
 function getDatabaseInstance() {
     return getDatabase(getAppInstance());
@@ -44,17 +48,32 @@ function nowMs() {
 }
 
 function ensureServerTimeOffset() {
-    if (serverTimeReady) return;
-    serverTimeReady = true;
-    try {
-        const offsetRef = ref(getDatabaseInstance(), ".info/serverTimeOffset");
-        onValue(offsetRef, (snap) => {
-            const value = Number(snap.val());
-            serverTimeOffsetMs = Number.isFinite(value) ? value : 0;
-        });
-    } catch (err) {
-        console.warn("P&R preview lock server time offset failed", err);
-    }
+    if (serverTimeWaiter) return serverTimeWaiter;
+    serverTimeWaiter = new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            serverTimeReady = true;
+            resolve();
+        };
+        try {
+            const offsetRef = ref(
+                getDatabaseInstance(),
+                ".info/serverTimeOffset",
+            );
+            onValue(offsetRef, (snap) => {
+                const value = Number(snap.val());
+                serverTimeOffsetMs = Number.isFinite(value) ? value : 0;
+                finish();
+            });
+            setTimeout(finish, SERVER_TIME_WAIT_MS);
+        } catch (err) {
+            console.warn("P&R preview lock server time offset failed", err);
+            finish();
+        }
+    });
+    return serverTimeWaiter;
 }
 
 function sleep(ms) {
@@ -83,6 +102,19 @@ function stopHeartbeat() {
     }
 }
 
+function isPreviewSessionActive() {
+    try {
+        return Boolean(
+            (screens.preview &&
+                screens.preview.classList.contains("active")) ||
+                (screens.labeldb &&
+                    screens.labeldb.classList.contains("active")),
+        );
+    } catch {
+        return false;
+    }
+}
+
 function ensurePageHideRelease() {
     if (pageHideBound || typeof window === "undefined") return;
     pageHideBound = true;
@@ -91,6 +123,16 @@ function ensurePageHideRelease() {
     };
     window.addEventListener("pagehide", release);
     window.addEventListener("beforeunload", release);
+}
+
+function ensureVisibilityRenew() {
+    if (visibilityBound || typeof document === "undefined") return;
+    visibilityBound = true;
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && heldByUs) {
+            void renewLockHeartbeat();
+        }
+    });
 }
 
 async function cancelDisconnectHook() {
@@ -140,8 +182,13 @@ async function renewLockHeartbeat() {
                     ? result.snapshot.val()
                     : null;
             if (!value || String(value.holderId) !== String(holderId)) {
+                // Another station cleared/took the lock. Reclaim if we are still
+                // on Preview so waiting computers cannot slip in while we remain.
                 heldByUs = false;
                 stopHeartbeat();
+                if (isPreviewSessionActive()) {
+                    void reclaimPreviewLockWhileActive();
+                }
             }
         }
     } catch (err) {
@@ -149,9 +196,19 @@ async function renewLockHeartbeat() {
     }
 }
 
+async function reclaimPreviewLockWhileActive() {
+    if (!isPreviewSessionActive() || heldByUs) return;
+    const result = await acquirePrPreviewLock();
+    if (!result.ok && isPreviewSessionActive()) {
+        // Lost exclusivity while still showing Preview; bounce this station.
+        notifyPreviewBusyAndReload(result.message);
+    }
+}
+
 function startHeartbeat() {
     stopHeartbeat();
     ensurePageHideRelease();
+    ensureVisibilityRenew();
     // Renew immediately so a just-claimed lock does not look stale to peers.
     void renewLockHeartbeat();
     heartbeatTimer = setInterval(() => {
@@ -165,11 +222,11 @@ async function readLockValue() {
 }
 
 /**
- * Delete the lock when this session owns it, or when it is already stale.
+ * Delete the lock only when this browser session owns it.
  * Uses remove() (not a null transaction) so unload/refresh cannot strand the node.
  */
 export async function releasePrPreviewLockIfHeld() {
-    ensureServerTimeOffset();
+    await ensureServerTimeOffset();
     releaseEpoch += 1;
     stopHeartbeat();
     heldByUs = false;
@@ -181,9 +238,8 @@ export async function releasePrPreviewLockIfHeld() {
             await cancelDisconnectHook();
             return;
         }
-        const ownsLock = String(value.holderId) === String(holderId);
-        const stale = isPrPreviewLockStale(value, nowMs());
-        if (ownsLock || stale) {
+        // Never delete another workstation's lock from release/startup paths.
+        if (shouldRemoveLockForHolder(value, holderId)) {
             await remove(lockRef);
         }
     } catch (err) {
@@ -195,20 +251,14 @@ export async function releasePrPreviewLockIfHeld() {
 }
 
 /**
- * On boot / source routing: clear our leftover lock and any stale lock so a
- * waiting station is not blocked forever after the holder refreshed/printed.
+ * On boot / source routing: clear only this tab's leftover lock so a refresh
+ * after printing does not leave us holding Preview exclusivity forever.
+ * Do not purge other stations' locks here — that let waiting computers steal
+ * Preview while the first station was still on the page.
  */
 export async function clearOwnPrPreviewLockOnStartup() {
-    ensureServerTimeOffset();
+    await ensureServerTimeOffset();
     await releasePrPreviewLockIfHeld();
-    try {
-        const value = await readLockValue();
-        if (value && isPrPreviewLockStale(value, nowMs())) {
-            await remove(getLockRef());
-        }
-    } catch (err) {
-        console.warn("P&R preview lock stale purge failed", err);
-    }
 }
 
 async function attemptAcquireOnce() {
@@ -276,7 +326,8 @@ async function attemptAcquireOnce() {
  * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
  */
 export async function acquirePrPreviewLock() {
-    ensureServerTimeOffset();
+    await ensureServerTimeOffset();
+    const holderId = getPrPreviewLockHolderId();
     try {
         for (let attempt = 0; attempt < BUSY_RETRY_ATTEMPTS; attempt += 1) {
             const result = await attemptAcquireOnce();
@@ -289,13 +340,22 @@ export async function acquirePrPreviewLock() {
         }
         return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
     } catch (err) {
-        // Fail open on transport/rules errors so a Firebase outage (or undeployed
-        // rules) does not freeze every P&R station. Busy is only returned when
-        // another holder is confirmed via a completed transaction.
-        console.warn(
-            "P&R preview lock acquire failed; continuing without lock",
-            err,
-        );
+        console.warn("P&R preview lock acquire failed", err);
+        // If another holder is still present, stay closed. Only continue without
+        // a lock when we cannot confirm a competing station.
+        try {
+            const value = await readLockValue();
+            if (
+                value &&
+                value.holderId &&
+                String(value.holderId) !== String(holderId) &&
+                !isPrPreviewLockStale(value, nowMs())
+            ) {
+                return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
+            }
+        } catch (readErr) {
+            console.warn("P&R preview lock busy re-check failed", readErr);
+        }
         heldByUs = false;
         stopHeartbeat();
         return { ok: true };
