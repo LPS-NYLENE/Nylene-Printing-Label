@@ -5,6 +5,9 @@ import {
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
+    nextClaimedSequence,
+    claimFromSequenceState,
+    releaseToSequenceState,
 } from "../modules/utils/daily-sequence.js";
 
 test("P&R sequence ignores other-day RI labels before the first regular box of the day", () => {
@@ -252,4 +255,52 @@ test("Coperion sequence restarts at 401 for a new day prefix", () => {
     );
 
     assert.equal(next, 401);
+});
+
+test("nextClaimedSequence seeds from print history on first claim", () => {
+    assert.equal(nextClaimedSequence(null, 0), 1);
+    assert.equal(nextClaimedSequence(null, 3), 4);
+    assert.equal(nextClaimedSequence(null, 400), 401);
+    assert.equal(nextClaimedSequence(null, 200), 201);
+});
+
+test("nextClaimedSequence advances from the higher of counter and seed", () => {
+    assert.equal(nextClaimedSequence(5, 3), 6);
+    assert.equal(nextClaimedSequence(5, 8), 9);
+    assert.equal(nextClaimedSequence(201, 200), 202);
+});
+
+test("nextClaimedSequence never skips when two callers race with the same seed", () => {
+    const first = nextClaimedSequence(null, 2);
+    const second = nextClaimedSequence(first, 2);
+    assert.equal(first, 3);
+    assert.equal(second, 4);
+});
+
+test("claimFromSequenceState migrates legacy numeric counters", () => {
+    const step = claimFromSequenceState(5, 3);
+    assert.equal(step.ok, true);
+    assert.equal(step.claimed, 6);
+    assert.deepEqual(step.nextState, { last: 6, free: {} });
+});
+
+test("releaseToSequenceState shrinks last when cancelling the newest claim", () => {
+    const afterClaim = claimFromSequenceState({ last: 23, free: {} }, 23);
+    assert.equal(afterClaim.claimed, 24);
+    const afterRelease = releaseToSequenceState(
+        afterClaim.nextState,
+        afterClaim.claimed,
+        23,
+    );
+    assert.deepEqual(afterRelease, { last: 23, free: {} });
+    const reused = claimFromSequenceState(afterRelease, 23);
+    assert.equal(reused.claimed, 24);
+});
+
+test("cancelled claim is reused before advancing the counter", () => {
+    const first = claimFromSequenceState(null, 0);
+    assert.equal(first.claimed, 1);
+    const released = releaseToSequenceState(first.nextState, 1, 0);
+    const second = claimFromSequenceState(released, 0);
+    assert.equal(second.claimed, 1);
 });
