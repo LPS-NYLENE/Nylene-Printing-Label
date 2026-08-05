@@ -48,21 +48,9 @@ export const screens = {
 };
 
 export function showScreen(name) {
-    const wasOnPreview = Boolean(
-        screens.preview && screens.preview.classList.contains("active"),
-    );
     Object.values(screens).forEach((s) => s && s.classList.remove("active"));
     const el = screens[name];
     if (el) el.classList.add("active");
-
-    // P&R preview is exclusively locked while a station is on Preview (or Label DB).
-    // Leaving that session releases the shared lock for other computers.
-    const staysInPreviewSession = name === "preview" || name === "labeldb";
-    if (wasOnPreview && !staysInPreviewSession) {
-        void import("./preview-lock.js")
-            .then((m) => m.releasePrPreviewLockIfHeld())
-            .catch(() => {});
-    }
 }
 
 export const BLANK_PRODUCT_LABEL = "BLANK";
