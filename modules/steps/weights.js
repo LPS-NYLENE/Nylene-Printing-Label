@@ -1,6 +1,7 @@
 import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
+import { enterPreviewWithLock } from "../preview-lock.js";
 
 const FIXED_NET_WEIGHTS = ["1800", "2204", "1102", "2204.6"];
 const PART_BOX_VALUE = "part-box";
@@ -288,7 +289,7 @@ export function initWeightsStep() {
 
     const preview = document.getElementById("previewBtn");
     if (preview)
-        preview.addEventListener("click", () => {
+        preview.addEventListener("click", async () => {
             syncNetWeightMode();
             const missingField = findFirstEmptyWeightInput();
             if (missingField) {
@@ -310,7 +311,18 @@ export function initWeightsStep() {
                 return;
             }
             clearWeightsError();
-            document.dispatchEvent(new CustomEvent("updatePreview"));
-            showScreen("preview");
+            preview.disabled = true;
+            try {
+                const entered = await enterPreviewWithLock({
+                    isCoperion: state.isCoperion,
+                });
+                if (!entered.ok) {
+                    setWeightsError(entered.message);
+                    return;
+                }
+                document.dispatchEvent(new CustomEvent("updatePreview"));
+            } finally {
+                preview.disabled = false;
+            }
         });
 }

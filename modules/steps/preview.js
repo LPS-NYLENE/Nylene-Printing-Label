@@ -21,6 +21,10 @@ import { splitProductDisplayLines } from "../utils/product-display.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
+import {
+    enterPreviewWithLock,
+    releasePrPreviewLockIfHeld,
+} from "../preview-lock.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -208,8 +212,12 @@ export function initPreviewStep() {
         state.reissueOriginalUnit = previous || unit;
         state.reissueFlowType = "new";
 
+        const entered = await enterPreviewWithLock({ isCoperion: false });
+        if (!entered.ok) {
+            alert(entered.message);
+            return;
+        }
         document.dispatchEvent(new CustomEvent("updatePreview"));
-        showScreen("preview");
     }
 
     async function handleInitialPrintFlow() {
@@ -241,6 +249,8 @@ export function initPreviewStep() {
             alert("Saving log failed after printing.");
         } finally {
             renderPreview();
+            // Release P&R preview lock before reload so other stations can continue.
+            await releasePrPreviewLockIfHeld();
             // Reload the app after printing completes
             window.location.reload();
         }
@@ -285,6 +295,7 @@ export function initPreviewStep() {
         }
         if (printError) throw printError;
         state.reprintAvailable = false;
+        await releasePrPreviewLockIfHeld();
         window.location.reload();
     }
 
