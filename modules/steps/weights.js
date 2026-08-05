@@ -1,7 +1,10 @@
 import { state, showScreen } from "../state.js";
 import { parseNumber } from "../utils/format.js";
 import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
-import { enterPreviewWithLock } from "../preview-lock.js";
+import {
+    enterPreviewWithLock,
+    notifyPreviewBusyAndReload,
+} from "../preview-lock.js";
 
 const FIXED_NET_WEIGHTS = ["1800", "2204", "1102", "2204.6"];
 const PART_BOX_VALUE = "part-box";
@@ -338,7 +341,7 @@ export function initWeightsStep() {
                     isCoperion: state.isCoperion,
                 });
                 if (!entered.ok) {
-                    setWeightsError(entered.message);
+                    notifyPreviewBusyAndReload(entered.message);
                     return;
                 }
                 document.dispatchEvent(new CustomEvent("updatePreview"));

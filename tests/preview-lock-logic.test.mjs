@@ -9,7 +9,10 @@ import {
 } from "../modules/utils/preview-lock-logic.js";
 
 test("busy message matches operator-facing copy", () => {
-    assert.equal(PR_PREVIEW_BUSY_MESSAGE, "One station currently busy");
+    assert.equal(
+        PR_PREVIEW_BUSY_MESSAGE,
+        "One station is currently busy. Please wait...",
+    );
 });
 
 test("empty lock can be claimed", () => {
