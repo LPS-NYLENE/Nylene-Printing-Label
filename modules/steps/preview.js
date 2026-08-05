@@ -215,6 +215,7 @@ export function initPreviewStep() {
         const entered = await enterPreviewWithLock({ isCoperion: false });
         if (!entered.ok) {
             alert(entered.message);
+            
             return;
         }
         document.dispatchEvent(new CustomEvent("updatePreview"));
