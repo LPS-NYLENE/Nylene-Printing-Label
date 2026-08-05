@@ -1,5 +1,9 @@
 import { state, showScreen } from "../state.js";
-import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
+import {
+    generateUnitNumberFromFirebase,
+    generateCoperionUnitNumberFromFirebase,
+    generateCompoundBagsUnitNumberFromFirebase,
+} from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
 import {
@@ -18,14 +22,10 @@ import { splitProductDisplayLines } from "../utils/product-display.js";
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
 import {
-    enterPreviewWithLock,
-    releasePrPreviewLockIfHeld,
-} from "../preview-lock.js";
-import {
-    commitPrReservation,
-    getActiveReservation,
-    reserveUnitNumberForPreview,
-} from "../sequence-reservation.js";
+    acquirePrPrintLock,
+    notifyPrintBusyAndReload,
+    releasePrPrintLockIfHeld,
+} from "../print-lock.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -142,23 +142,58 @@ export function initPreviewStep() {
 
     const printBtn = document.getElementById("printBtn");
     let printInFlight = false;
+
+    function setPrintButtonLoading(isLoading) {
+        if (!printBtn) return;
+        if (isLoading) {
+            if (!printBtn.dataset.defaultLabel) {
+                printBtn.dataset.defaultLabel = printBtn.textContent || "Print";
+            }
+            printBtn.disabled = true;
+            printBtn.setAttribute("aria-busy", "true");
+            printBtn.innerHTML =
+                '<span class="btn-loading-label"><span class="btn-spinner" aria-hidden="true"></span><span>Printing...</span></span>';
+            return;
+        }
+        printBtn.disabled = false;
+        printBtn.removeAttribute("aria-busy");
+        printBtn.textContent = printBtn.dataset.defaultLabel || "Print";
+    }
+
     if (printBtn)
         printBtn.addEventListener("click", async () => {
-            if (printInFlight) return;
+            if (printInFlight || printBtn.disabled) return;
             printInFlight = true;
+            setPrintButtonLoading(true);
+            let acquiredPrintLock = false;
             try {
+                // Serialize P&R prints across workstations (Coperion is single-station).
+                if (!state.isCoperion) {
+                    const lock = await acquirePrPrintLock();
+                    if (!lock.ok) {
+                        notifyPrintBusyAndReload(lock.message);
+                        return;
+                    }
+                    acquiredPrintLock = true;
+                }
                 if (state.reprintAvailable && state.lastPrinted) {
-                    await handleReprintFlow();
+                    await handleReprintFlow({ holdPrintLock: acquiredPrintLock });
                     return;
                 }
-                await handleInitialPrintFlow();
+                await handleInitialPrintFlow({
+                    holdPrintLock: acquiredPrintLock,
+                });
             } catch (err) {
                 console.error("Failed to start printing", err);
                 alert(
                     "Printing could not be started. Please check your browser settings and try again.",
                 );
+                if (acquiredPrintLock) {
+                    await releasePrPrintLockIfHeld();
+                }
             } finally {
                 printInFlight = false;
+                setPrintButtonLoading(false);
             }
         });
 
@@ -213,34 +248,25 @@ export function initPreviewStep() {
         state.reissueOriginalUnit = previous || unit;
         state.reissueFlowType = "new";
 
-        const previewEntry = await enterPreviewWithLock({ isCoperion: false });
-        if (!previewEntry.ok) {
-            alert(previewEntry.message);
-            return;
-        }
         document.dispatchEvent(new CustomEvent("updatePreview"));
+        showScreen("preview");
     }
 
-    async function handleInitialPrintFlow() {
-        // Always release the P&R preview lock when leaving this flow so other
-        // stations are not stuck on "One station currently busy".
+    async function handleInitialPrintFlow({ holdPrintLock = false } = {}) {
         try {
-            // Use the reserved preview number (claimed when entering Preview).
-            await refreshUnitNumberIfNeeded();
+            // Refresh from printed history right before printing (no advance reservation).
+            await refreshUnitNumberIfNeeded(true);
             renderPreview();
             await openPrintDialog(getDesiredPrintCopies());
             try {
                 await appendLogRecord();
                 appendHistoryRecord();
-                // Save snapshot of what was printed for reprint
                 const printedAt = new Date().toISOString();
                 state.lastPrinted = buildPrintedSnapshotFromState(
                     state,
                     printedAt,
                 );
                 state.reprintAvailable = true;
-                // Keep the reserved suffix consumed so the next station gets N+1.
-                commitPrReservation();
             } catch (err) {
                 console.error("Log append failed after print", err);
                 alert("Saving log failed after printing.");
@@ -248,13 +274,14 @@ export function initPreviewStep() {
                 renderPreview();
             }
         } finally {
-            // If print/log failed, lock release frees the reservation for reuse.
-            await releasePrPreviewLockIfHeld();
+            if (holdPrintLock) {
+                await releasePrPrintLockIfHeld();
+            }
             window.location.reload();
         }
     }
 
-    async function handleReprintFlow() {
+    async function handleReprintFlow({ holdPrintLock = false } = {}) {
         const previous = {
             unitNumber: state.unitNumber,
             bigCode: state.bigCode,
@@ -295,7 +322,9 @@ export function initPreviewStep() {
             if (printError) throw printError;
             state.reprintAvailable = false;
         } finally {
-            await releasePrPreviewLockIfHeld();
+            if (holdPrintLock) {
+                await releasePrPrintLockIfHeld();
+            }
             window.location.reload();
         }
     }
@@ -349,14 +378,12 @@ export function initPreviewStep() {
     async function getNextUnitNumberForPreview(group, letter) {
         if (state.isCoperion)
             return await generateCoperionUnitNumberFromFirebase();
-        // P&R / BAGS: atomically reserve so another station cannot show the same suffix.
-        const key = getUnitNumberContextKey();
-        return await reserveUnitNumberForPreview({
-            group,
-            letter,
-            product: state.bigCode,
-            contextKey: key,
-        });
+        if (isCompoundBagsContext(group, state.bigCode))
+            return await generateCompoundBagsUnitNumberFromFirebase(
+                group,
+                letter,
+            );
+        return await generateUnitNumberFromFirebase(group, letter);
     }
 
     function getUnitNumberContextKey() {
@@ -384,13 +411,9 @@ export function initPreviewStep() {
             state.__unitNumberContextKey = key;
             return;
         }
-        const hasMatchingReservation =
-            state.isCoperion ||
-            getActiveReservation()?.contextKey === key;
         if (
             !force &&
             state.__unitNumberContextKey === key &&
-            hasMatchingReservation &&
             isUsableUnitNumberForCurrentContext(
                 state.unitNumber,
                 group,
