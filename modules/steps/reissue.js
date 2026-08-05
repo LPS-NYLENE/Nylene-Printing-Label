@@ -7,6 +7,7 @@ import {
     PR_PRODUCT_CHOICES,
 } from "../catalog/product-choices.js";
 import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
+import { enterPreviewWithLock } from "../preview-lock.js";
 
 const REISSUE_FLAG = "RI";
 
@@ -254,9 +255,13 @@ export function initReissueFlow() {
         state.reprintAvailable = false;
         state.lastPrinted = null;
 
+        const entered = await enterPreviewWithLock({ isCoperion });
+        if (!entered.ok) {
+            setEditError(entered.message);
+            return;
+        }
         closeEditModal();
         document.dispatchEvent(new CustomEvent("updatePreview"));
-        showScreen("preview");
     }
 
     reissueButtons.forEach((reissueBtn) => {
