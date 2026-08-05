@@ -10,6 +10,7 @@ import {
     promptForLotNumber,
     promptForPassword,
 } from "../utils/operator-prompts.js";
+import { enterPreviewWithLock } from "../preview-lock.js";
 
 const REISSUE_FLAG = "RI";
 const PASSWORD_EXPECTED = "Nylene2026!";
@@ -206,9 +207,15 @@ export function initReissueNewFlow() {
             state.reissueFlag = REISSUE_FLAG;
             state.reissueOriginalUnit = normalizeUnitNumber(record.unitNumber);
             state.reissueFlowType = "existing";
+            const entered = await enterPreviewWithLock({
+                isCoperion: state.isCoperion,
+            });
+            if (!entered.ok) {
+                setError(entered.message);
+                return;
+            }
             closeModal();
             document.dispatchEvent(new CustomEvent("updatePreview"));
-            showScreen("preview");
             return;
         }
 
