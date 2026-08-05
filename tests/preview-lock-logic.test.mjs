@@ -6,6 +6,7 @@ import {
     PR_PREVIEW_LOCK_STALE_MS,
     canClaimPrPreviewLock,
     isPrPreviewLockStale,
+    shouldRemoveLockForHolder,
 } from "../modules/utils/preview-lock-logic.js";
 
 test("busy message matches operator-facing copy", () => {
@@ -53,10 +54,23 @@ test("other holder can take over after stale timeout", () => {
     );
 });
 
-test("stale timeout is 20 seconds for stuck-lock recovery", () => {
-    assert.equal(PR_PREVIEW_LOCK_STALE_MS, 20 * 1000);
+test("stale timeout allows active preview leases to survive timer throttling", () => {
+    assert.equal(PR_PREVIEW_LOCK_STALE_MS, 90 * 1000);
 });
 
 test("isPrPreviewLockStale treats missing timestamps as stale", () => {
     assert.equal(isPrPreviewLockStale({ holderId: "a" }, 5000), true);
+});
+
+test("release/startup cleanup only removes this station's lock", () => {
+    assert.equal(
+        shouldRemoveLockForHolder({ holderId: "computer-1" }, "computer-1"),
+        true,
+    );
+    assert.equal(
+        shouldRemoveLockForHolder({ holderId: "computer-1" }, "computer-2"),
+        false,
+    );
+    assert.equal(shouldRemoveLockForHolder(null, "computer-2"), false);
+    assert.equal(shouldRemoveLockForHolder({}, "computer-2"), false);
 });
