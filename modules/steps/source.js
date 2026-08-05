@@ -37,54 +37,26 @@ export function initSourceStep() {
         state.selectedProduct = null;
     }
 
-    function getLoginFlow() {
-        return localStorage.getItem("last_flow_v1") || "pr";
-    }
-
-    function compoundLineForFlow(flow = getLoginFlow()) {
-        if (flow === "compound-a") return "A";
-        if (flow === "compound-b") return "B";
-        return null;
-    }
-
-    function applySourceView(detail = {}) {
+    function applySourceView() {
         const sourceTitle = document.getElementById("sourceTitle");
         const sourceGrid = document.getElementById("sourceGrid");
-        const flow = getLoginFlow();
-        const compoundLine =
-            detail.compoundLine === "A" || detail.compoundLine === "B"
-                ? detail.compoundLine
-                : compoundLineForFlow(flow);
-        const isCompoundOnly = Boolean(compoundLine);
 
         clearReissueState();
         clearSourceSelection();
 
         if (sourceTitle) {
-            if (compoundLine === "A") {
-                sourceTitle.textContent = "CHOOSE SOURCE FOR A-LINE COMPOUND :";
-            } else if (compoundLine === "B") {
-                sourceTitle.textContent = "CHOOSE SOURCE FOR B-LINE COMPOUND :";
-            } else {
-                sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
-            }
+            sourceTitle.textContent = "CHOOSE SOURCE FOR P&R :";
         }
 
         if (sourceGrid) {
-            sourceGrid.classList.toggle("compound-only", isCompoundOnly);
-            sourceGrid.classList.toggle("pr-only", !isCompoundOnly);
+            sourceGrid.classList.remove("compound-only", "pr-only");
         }
 
+        // One-computer P&R: show Silo, Dryer, and Compound A/B.
         document
             .querySelectorAll("#screen-source [data-source-card]")
             .forEach((card) => {
-                const kind = card.getAttribute("data-source-card");
-                if (isCompoundOnly) {
-                    card.classList.toggle("hidden", kind !== "compound");
-                } else {
-                    // P&R login: Silo / Dryer only (no Compound column).
-                    card.classList.toggle("hidden", kind === "compound");
-                }
+                card.classList.remove("hidden");
             });
 
         document
@@ -92,51 +64,17 @@ export function initSourceStep() {
                 '#screen-source .btn-col[data-group="compound"] .option',
             )
             .forEach((btn) => {
-                const letter = String(
-                    btn.getAttribute("data-value") || "",
-                ).toUpperCase();
-                const show = isCompoundOnly && letter === compoundLine;
-                btn.classList.toggle("hidden", !show);
-                btn.classList.toggle("selected", show);
+                btn.classList.remove("hidden", "selected");
             });
 
-        if (isCompoundOnly) {
-            state.activeGroup = "compound";
-            state.source.compound = compoundLine;
-            state.isCoperion = false;
-        }
-
-        // P&R source footer: Unextracted + Lactam (image 1).
-        // Compound A/B source screens hide these; product-screen specials are separate.
+        // P&R source footer: Unextracted + Lactam.
         sourceSpecialButtons().forEach((btn) => {
-            btn.classList.toggle("hidden", isCompoundOnly);
+            btn.classList.remove("hidden");
         });
     }
 
-    function enterCompoundProducts(compoundLine) {
-        const line = compoundLine === "B" ? "B" : "A";
-        clearReissueState();
-        state.isCoperion = false;
-        state.activeGroup = "compound";
-        state.source.silo = null;
-        state.source.dryer = null;
-        state.source.compound = line;
-        state.source.special = null;
-        state.source.other = null;
-        state.selectedProduct = null;
-        applySourceView({ compoundLine: line });
-        showScreen("products");
-        document.dispatchEvent(new CustomEvent("renderProductList"));
-    }
-
-    document.addEventListener("configureSourceView", (event) => {
-        const detail = (event && event.detail) || {};
-        applySourceView(detail);
-        // A/B-Line login goes straight to products so Change products /
-        // Unextracted / Capro are visible immediately.
-        if (detail.enterProducts && detail.compoundLine) {
-            enterCompoundProducts(detail.compoundLine);
-        }
+    document.addEventListener("configureSourceView", () => {
+        applySourceView();
     });
     applySourceView();
 

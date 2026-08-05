@@ -16,18 +16,11 @@ import {
     get,
     set,
     onValue,
-    runTransaction,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import {
-    LABEL_SEQUENCE_MAX,
     getNextPrSequenceFromRecords,
     getNextCoperionSequenceFromRecords,
     getNextCompoundBagsSequenceFromRecords,
-    getLastPrSequenceFromRecords,
-    getLastCoperionSequenceFromRecords,
-    getLastCompoundBagsSequenceFromRecords,
-    claimFromSequenceState,
-    releaseToSequenceState,
 } from "./utils/daily-sequence.js";
 import {
     formatLocalDayKey,
@@ -200,83 +193,11 @@ async function fetchPrintRecordsForLabelDay(db, dayContext) {
     return collectRecordsWithinWindow(snaps, start, end);
 }
 
-// Counter stores last claimed suffix + free list for a pool on a local day.
-// Path: labelSequences/{YYYY-MM-DD}/{pr|coperion|compoundBags}
-// Shape: { last: number, free: { "24": true, ... } }
-// Legacy plain-number counters are migrated on first transaction.
-function makeSequenceCounterPath(localDayKey, sequenceName) {
-    return `labelSequences/${localDayKey}/${sequenceName}`;
-}
-
-/**
- * Atomically claim the next suffix for a pool.
- * Prefers freed (cancelled) suffixes, otherwise advances last.
- * Seeded from printed history so we never reuse a printed number.
- */
-async function claimSequenceTransaction(localDayKey, sequenceName, seedLast) {
-    const db = getDatabaseInstance();
-    const counterRef = ref(
-        db,
-        makeSequenceCounterPath(localDayKey, sequenceName),
-    );
-    let claimed = null;
-    const result = await runTransaction(counterRef, (currentValue) => {
-        const step = claimFromSequenceState(currentValue, seedLast, {
-            maxAt: LABEL_SEQUENCE_MAX,
-        });
-        if (!step.ok) {
-            claimed = null;
-            return undefined;
-        }
-        claimed = step.claimed;
-        return step.nextState;
-    });
-
-    if (!result.committed || !Number.isFinite(claimed)) {
-        throw new Error(
-            `No ${sequenceName} label numbers remain for ${localDayKey}`,
-        );
-    }
-    return claimed;
-}
-
-/**
- * Return a cancelled claim so the suffix can be reused (no skip).
- */
-async function releaseSequenceTransaction(
-    localDayKey,
-    sequenceName,
-    suffix,
-    seedLast,
-) {
-    const db = getDatabaseInstance();
-    const counterRef = ref(
-        db,
-        makeSequenceCounterPath(localDayKey, sequenceName),
-    );
-    const released = Number(suffix);
-    if (!Number.isFinite(released)) {
-        throw new Error(`Invalid sequence suffix to release: ${suffix}`);
-    }
-
-    const result = await runTransaction(counterRef, (currentValue) =>
-        releaseToSequenceState(currentValue, released, seedLast),
-    );
-
-    if (!result.committed) {
-        throw new Error(
-            `Could not release ${sequenceName} sequence ${released} for ${localDayKey}`,
-        );
-    }
-    return released;
-}
-
 // Compute the next daily sequence (last three digits) for a given date
 // by inspecting existing prints for that day in Realtime Database.
 // Buckets were historically stored under UTC day keys; we now store under local
 // day keys. For backward compatibility, we read both local and UTC buckets.
-// Returns 1 if no prior regular (non-RI) P&R prints exist for the day.
-// Preview-only: does not claim/advance the shared counter.
+// Returns 1 if no prior P&R prints (including same-day reissues) exist for the day.
 export async function getNextDailySequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
@@ -285,43 +206,22 @@ export async function getNextDailySequenceFromFirebase(date) {
     // Build the Coperion EA day prefix so P&R excludes same-day Coperion labels,
     // including legacy labels whose year digits were generated differently.
     const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
+    const labelDayDigits = `${yearDigits}${dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    return getNextPrSequenceFromRecords(records, { coperionPrefixForDay });
-}
-
-// Claim the next P&R suffix atomically at print time (not preview).
-export async function claimNextDailySequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastPrSequenceFromRecords(records, {
+    return getNextPrSequenceFromRecords(records, {
         coperionPrefixForDay,
+        labelDayDigits,
     });
-    return claimSequenceTransaction(localDayKey, "pr", seedLast);
-}
-
-export async function releaseDailySequenceToFirebase(date, suffix) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const coperionPrefixForDay = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastPrSequenceFromRecords(records, {
-        coperionPrefixForDay,
-    });
-    return releaseSequenceTransaction(localDayKey, "pr", suffix, seedLast);
 }
 
 // Compute the next Coperion daily sequence (last three digits) for the given date
 // Rules:
 // - Prefix for Coperion: EA + last two digits of year + day-of-year (DDD)
 // - Last three digits start at 401 each new day (00:01 rule applies)
-// - Increments based on existing regular (non-RI) records in DB for the same EA day prefix,
-//   ignoring the year digits so migrated labels continue from legacy EA16DDD suffixes
+// - Increments based on existing records in DB for the same EA day prefix
+//   (including same-day reissues), ignoring the year digits so migrated labels
+//   continue from legacy EA16DDD suffixes
 // - Returns the next suffix within 401..999
-// Preview-only: does not claim/advance the shared counter.
 export async function getNextCoperionSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
@@ -333,68 +233,18 @@ export async function getNextCoperionSequenceFromFirebase(date) {
     return getNextCoperionSequenceFromRecords(records, { prefix });
 }
 
-export async function claimNextCoperionSequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const prefix = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCoperionSequenceFromRecords(records, { prefix });
-    return claimSequenceTransaction(localDayKey, "coperion", seedLast);
-}
-
-export async function releaseCoperionSequenceToFirebase(date, suffix) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const { dayOfYearStr, yearDigits, localDayKey } = dayContext;
-    const prefix = `EA${yearDigits}${dayOfYearStr}`;
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCoperionSequenceFromRecords(records, { prefix });
-    return releaseSequenceTransaction(
-        localDayKey,
-        "coperion",
-        suffix,
-        seedLast,
-    );
-}
-
 // Compute the next Compound+BAGS daily sequence (last three digits) for the given date.
 // Rules:
 // - Applies only to prints where sourceGroup === "compound" AND product ends with "BAGS"
 // - Last three digits start at 201 each new day (00:01 rule applies)
-// - Increments based on existing regular (non-RI) matching records in DB
+// - Increments based on existing matching records in DB (including same-day reissues)
 // - Returns the next suffix within 201..999
-// Preview-only: does not claim/advance the shared counter.
 export async function getNextCompoundBagsSequenceFromFirebase(date) {
     const db = getDatabaseInstance();
     const dayContext = getLabelDayContext(date);
+    const labelDayDigits = `${dayContext.yearDigits}${dayContext.dayOfYearStr}`;
     const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    return getNextCompoundBagsSequenceFromRecords(records);
-}
-
-export async function claimNextCompoundBagsSequenceFromFirebase(date) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCompoundBagsSequenceFromRecords(records);
-    return claimSequenceTransaction(
-        dayContext.localDayKey,
-        "compoundBags",
-        seedLast,
-    );
-}
-
-export async function releaseCompoundBagsSequenceToFirebase(date, suffix) {
-    const db = getDatabaseInstance();
-    const dayContext = getLabelDayContext(date);
-    const records = await fetchPrintRecordsForLabelDay(db, dayContext);
-    const seedLast = getLastCompoundBagsSequenceFromRecords(records);
-    return releaseSequenceTransaction(
-        dayContext.localDayKey,
-        "compoundBags",
-        suffix,
-        seedLast,
-    );
+    return getNextCompoundBagsSequenceFromRecords(records, { labelDayDigits });
 }
 
 function parseIsoDateOrNow(value) {

@@ -3,6 +3,7 @@ import { parseNumber } from "../utils/format.js";
 import { getMaxWeightDifferenceError } from "../utils/weight-validation.js";
 
 const FIXED_NET_WEIGHTS = ["1800", "2204", "1102", "2204.6"];
+const PART_BOX_VALUE = "part-box";
 const PR_SOURCE_GROUPS = new Set(["silo", "dryer", "compound", "other"]);
 
 export function initWeightsStep() {
@@ -33,12 +34,31 @@ export function initWeightsStep() {
         );
     }
 
+    function isPartBoxSelected() {
+        return (
+            usesFixedNetWeights &&
+            selectNet &&
+            String(selectNet.value || "").trim() === PART_BOX_VALUE
+        );
+    }
+
+    function syncPartBoxInputVisibility() {
+        if (!inputNet) return;
+        if (!usesFixedNetWeights) {
+            inputNet.classList.remove("hidden");
+            inputNet.disabled = false;
+            return;
+        }
+        const showPartBoxInput = isPartBoxSelected();
+        inputNet.classList.toggle("hidden", !showPartBoxInput);
+        inputNet.disabled = !showPartBoxInput;
+        if (!showPartBoxInput) {
+            inputNet.value = "";
+        }
+    }
+
     function syncNetWeightMode() {
         usesFixedNetWeights = shouldUseFixedNetWeights();
-        if (inputNet) {
-            inputNet.classList.toggle("hidden", usesFixedNetWeights);
-            inputNet.disabled = usesFixedNetWeights;
-        }
         if (selectNet) {
             selectNet.classList.toggle("hidden", !usesFixedNetWeights);
             selectNet.disabled = !usesFixedNetWeights;
@@ -51,14 +71,21 @@ export function initWeightsStep() {
             ) {
                 selectNet.value = String(inputNet.value).trim();
             }
-            focusedInput = selectNet || inputGross || inputNet;
+            syncPartBoxInputVisibility();
+            focusedInput = isPartBoxSelected()
+                ? inputNet || inputGross
+                : selectNet || inputGross || inputNet;
         } else {
+            syncPartBoxInputVisibility();
             focusedInput = inputNet || inputGross;
         }
     }
 
     function getNetControl() {
-        return usesFixedNetWeights && selectNet ? selectNet : inputNet;
+        if (usesFixedNetWeights && selectNet) {
+            return isPartBoxSelected() ? inputNet : selectNet;
+        }
+        return inputNet;
     }
 
     function getWeightFields() {
@@ -123,6 +150,18 @@ export function initWeightsStep() {
     }
 
     function findFirstEmptyWeightInput() {
+        if (usesFixedNetWeights && selectNet) {
+            const selected = String(selectNet.value || "").trim();
+            if (!selected) {
+                return { el: selectNet, label: "net weight (lbs.)" };
+            }
+            if (selected === PART_BOX_VALUE) {
+                const partBoxValue = String(inputNet?.value || "").trim();
+                if (!partBoxValue) {
+                    return { el: inputNet, label: "net weight (lbs.)" };
+                }
+            }
+        }
         for (const field of getWeightFields()) {
             const el = field.el;
             if (!el) continue;
@@ -153,12 +192,24 @@ export function initWeightsStep() {
         }
     }
 
+    function handleNetSelectChange() {
+        syncPartBoxInputVisibility();
+        if (isPartBoxSelected()) {
+            focusedInput = inputNet || inputGross;
+            if (inputNet) inputNet.focus();
+        } else {
+            focusedInput = selectNet || inputGross || inputNet;
+        }
+        handleWeightInput();
+    }
+
     function prefillDefaultWeights() {
         syncNetWeightMode();
         if (inputNet) inputNet.value = "";
         if (selectNet) selectNet.value = "";
         if (inputGross) inputGross.value = "";
         if (inputTare) inputTare.value = "";
+        syncPartBoxInputVisibility();
         focusedInput = getNetControl();
         handleWeightInput();
         clearWeightsError();
@@ -180,6 +231,10 @@ export function initWeightsStep() {
             handleWeightInput();
         });
         el.addEventListener("change", () => {
+            if (el === selectNet) {
+                handleNetSelectChange();
+                return;
+            }
             handleWeightInput();
         });
     });
@@ -203,6 +258,7 @@ export function initWeightsStep() {
             if (selectNet) selectNet.value = "";
             if (inputGross) inputGross.value = "";
             if (inputTare) inputTare.value = "";
+            syncPartBoxInputVisibility();
             focusedInput = getNetControl();
             handleWeightInput();
             clearWeightsError();

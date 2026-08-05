@@ -2,20 +2,8 @@ import {
     getNextDailySequenceFromFirebase,
     getNextCoperionSequenceFromFirebase,
     getNextCompoundBagsSequenceFromFirebase,
-    claimNextDailySequenceFromFirebase,
-    claimNextCoperionSequenceFromFirebase,
-    claimNextCompoundBagsSequenceFromFirebase,
-    releaseDailySequenceToFirebase,
-    releaseCoperionSequenceToFirebase,
-    releaseCompoundBagsSequenceToFirebase,
 } from "../firebase-db.js";
 import { getDayOfYear, getLabelDayContext } from "./label-rollover.js";
-import { normalizeUnitNumber } from "./unit-number.js";
-
-function suffixFromUnitNumber(unitNumber) {
-    const suffix = parseInt(normalizeUnitNumber(unitNumber).slice(-3), 10);
-    return Number.isFinite(suffix) ? suffix : null;
-}
 
 export function generateUnitNumber(sourceGroup, sourceLetter) {
     const now = new Date();
@@ -26,21 +14,11 @@ export function generateUnitNumber(sourceGroup, sourceLetter) {
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
-// Preview estimate: next number from printed records only (does not claim)
+// Next number from printed records (single station).
 export async function generateUnitNumberFromFirebase(sourceGroup, sourceLetter) {
     const now = new Date();
     const dayContext = getLabelDayContext(now);
     const seq = await getNextDailySequenceFromFirebase(now);
-    const seqStr = String(seq).padStart(3, "0");
-    const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-// Print-time claim: atomically takes the next P&R suffix across all machines.
-export async function claimUnitNumberFromFirebase(sourceGroup, sourceLetter) {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await claimNextDailySequenceFromFirebase(now);
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
@@ -56,19 +34,10 @@ export async function generateCoperionUnitNumberFromFirebase() {
     return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
 }
 
-export async function claimCoperionUnitNumberFromFirebase() {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await claimNextCoperionSequenceFromFirebase(now);
-    const seqStr = String(seq).padStart(3, "0");
-    return `EA${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
 // Explicit Compound+BAGS generator, used only when:
 // - sourceGroup === "compound"
 // - product code ends with "BAGS"
 // Format: (AC|BC) + last two digits of year + day-of-year (DDD) + suffix starting at 201
-// Preview estimate only — print uses claimCompoundBagsUnitNumberFromFirebase.
 export async function generateCompoundBagsUnitNumberFromFirebase(
     sourceGroup,
     sourceLetter
@@ -79,35 +48,6 @@ export async function generateCompoundBagsUnitNumberFromFirebase(
     const seqStr = String(seq).padStart(3, "0");
     const prefix = resolvePrefix(sourceGroup, sourceLetter);
     return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-export async function claimCompoundBagsUnitNumberFromFirebase(
-    sourceGroup,
-    sourceLetter
-) {
-    const now = new Date();
-    const dayContext = getLabelDayContext(now);
-    const seq = await claimNextCompoundBagsSequenceFromFirebase(now);
-    const seqStr = String(seq).padStart(3, "0");
-    const prefix = resolvePrefix(sourceGroup, sourceLetter);
-    return `${prefix}${dayContext.yearDigits}${dayContext.dayOfYearStr}${seqStr}`;
-}
-
-/** Return a cancelled print-time claim so the last-3 digits can be reused. */
-export async function releaseClaimedUnitNumber(pool, unitNumber) {
-    const suffix = suffixFromUnitNumber(unitNumber);
-    if (suffix === null) {
-        throw new Error(`Cannot release invalid unit number: ${unitNumber}`);
-    }
-    const now = new Date();
-    const name = String(pool || "").toLowerCase();
-    if (name === "coperion") {
-        return releaseCoperionSequenceToFirebase(now, suffix);
-    }
-    if (name === "bags" || name === "compoundbags") {
-        return releaseCompoundBagsSequenceToFirebase(now, suffix);
-    }
-    return releaseDailySequenceToFirebase(now, suffix);
 }
 
 const SEQ_STORE_KEY = "unit_seq_store_v1";
