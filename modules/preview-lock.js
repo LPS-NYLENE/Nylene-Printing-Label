@@ -5,6 +5,7 @@ import {
     onDisconnect,
     remove,
     get,
+    onValue,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { getAppInstance } from "./firebase-db.js";
 import { showScreen } from "./state.js";
@@ -12,17 +13,22 @@ import {
     PR_PREVIEW_BUSY_MESSAGE,
     PR_PREVIEW_LOCK_STALE_MS,
     canClaimPrPreviewLock,
+    isPrPreviewLockStale,
 } from "./utils/preview-lock-logic.js";
 
 const PR_PREVIEW_LOCK_PATH = "previewLocks/pr";
 const HOLDER_STORAGE_KEY = "pr_preview_lock_holder_v1";
-const HEARTBEAT_MS = 15 * 1000;
+const HEARTBEAT_MS = 8 * 1000;
+const BUSY_RETRY_ATTEMPTS = 4;
+const BUSY_RETRY_DELAY_MS = 700;
 
 let heartbeatTimer = null;
 let pageHideBound = false;
 let heldByUs = false;
 let releaseEpoch = 0;
 let disconnectConfigured = false;
+let serverTimeOffsetMs = 0;
+let serverTimeReady = false;
 
 function getDatabaseInstance() {
     return getDatabase(getAppInstance());
@@ -30,6 +36,28 @@ function getDatabaseInstance() {
 
 function getLockRef() {
     return ref(getDatabaseInstance(), PR_PREVIEW_LOCK_PATH);
+}
+
+function nowMs() {
+    return Date.now() + serverTimeOffsetMs;
+}
+
+function ensureServerTimeOffset() {
+    if (serverTimeReady) return;
+    serverTimeReady = true;
+    try {
+        const offsetRef = ref(getDatabaseInstance(), ".info/serverTimeOffset");
+        onValue(offsetRef, (snap) => {
+            const value = Number(snap.val());
+            serverTimeOffsetMs = Number.isFinite(value) ? value : 0;
+        });
+    } catch (err) {
+        console.warn("P&R preview lock server time offset failed", err);
+    }
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function getPrPreviewLockHolderId() {
@@ -77,6 +105,8 @@ async function cancelDisconnectHook() {
 
 async function configureDisconnectHook() {
     try {
+        // Keep this armed until AFTER a successful remove. Canceling first was
+        // leaving stuck locks when refresh/unload interrupted the delete.
         await onDisconnect(getLockRef()).remove();
         disconnectConfigured = true;
     } catch (err) {
@@ -89,7 +119,7 @@ async function renewLockHeartbeat() {
     if (!heldByUs) return;
     const epoch = releaseEpoch;
     const holderId = getPrPreviewLockHolderId();
-    const now = Date.now();
+    const now = nowMs();
     try {
         const result = await runTransaction(getLockRef(), (current) => {
             if (!heldByUs || epoch !== releaseEpoch) return;
@@ -104,7 +134,6 @@ async function renewLockHeartbeat() {
         });
         if (!heldByUs || epoch !== releaseEpoch) return;
         if (!result.committed) {
-            // Only drop local ownership when Firebase confirms we no longer hold it.
             const value =
                 result.snapshot && typeof result.snapshot.val === "function"
                     ? result.snapshot.val()
@@ -122,9 +151,123 @@ async function renewLockHeartbeat() {
 function startHeartbeat() {
     stopHeartbeat();
     ensurePageHideRelease();
+    // Renew immediately so a just-claimed lock does not look stale to peers.
+    void renewLockHeartbeat();
     heartbeatTimer = setInterval(() => {
         void renewLockHeartbeat();
     }, HEARTBEAT_MS);
+}
+
+async function readLockValue() {
+    const snap = await get(getLockRef());
+    return snap.exists() ? snap.val() : null;
+}
+
+/**
+ * Delete the lock when this session owns it, or when it is already stale.
+ * Uses remove() (not a null transaction) so unload/refresh cannot strand the node.
+ */
+export async function releasePrPreviewLockIfHeld() {
+    ensureServerTimeOffset();
+    releaseEpoch += 1;
+    stopHeartbeat();
+    heldByUs = false;
+    const holderId = getPrPreviewLockHolderId();
+    const lockRef = getLockRef();
+    try {
+        const value = await readLockValue();
+        if (!value) {
+            await cancelDisconnectHook();
+            return;
+        }
+        const ownsLock = String(value.holderId) === String(holderId);
+        const stale = isPrPreviewLockStale(value, nowMs());
+        if (ownsLock || stale) {
+            await remove(lockRef);
+        }
+    } catch (err) {
+        console.warn("P&R preview lock release failed", err);
+    } finally {
+        // Only cancel after attempting remove so crash mid-release still cleans up.
+        await cancelDisconnectHook();
+    }
+}
+
+/**
+ * On boot / source routing: clear our leftover lock and any stale lock so a
+ * waiting station is not blocked forever after the holder refreshed/printed.
+ */
+export async function clearOwnPrPreviewLockOnStartup() {
+    ensureServerTimeOffset();
+    await releasePrPreviewLockIfHeld();
+    try {
+        const value = await readLockValue();
+        if (value && isPrPreviewLockStale(value, nowMs())) {
+            await remove(getLockRef());
+        }
+    } catch (err) {
+        console.warn("P&R preview lock stale purge failed", err);
+    }
+}
+
+async function attemptAcquireOnce() {
+    const holderId = getPrPreviewLockHolderId();
+    const lockRef = getLockRef();
+    const now = nowMs();
+
+    // If a stale lock is present, delete it before claiming so release races
+    // cannot leave a zombie node that forever reports busy.
+    try {
+        const existing = await readLockValue();
+        if (
+            existing &&
+            String(existing.holderId) !== String(holderId) &&
+            isPrPreviewLockStale(existing, now)
+        ) {
+            await remove(lockRef);
+        }
+    } catch (err) {
+        console.warn("P&R preview lock stale pre-clear failed", err);
+    }
+
+    const result = await runTransaction(lockRef, (current) => {
+        const claimNow = nowMs();
+        if (
+            !canClaimPrPreviewLock(
+                current,
+                holderId,
+                claimNow,
+                PR_PREVIEW_LOCK_STALE_MS,
+            )
+        ) {
+            return;
+        }
+        return {
+            holderId,
+            heldAt:
+                current && String(current.holderId) === String(holderId)
+                    ? current.heldAt || claimNow
+                    : claimNow,
+            renewedAt: claimNow,
+        };
+    });
+
+    if (!result.committed) {
+        return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
+    }
+
+    const value =
+        result.snapshot && typeof result.snapshot.val === "function"
+            ? result.snapshot.val()
+            : null;
+    if (!value || String(value.holderId) !== String(holderId)) {
+        return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
+    }
+
+    heldByUs = true;
+    await configureDisconnectHook();
+    startHeartbeat();
+    return { ok: true };
 }
 
 /**
@@ -132,48 +275,18 @@ function startHeartbeat() {
  * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
  */
 export async function acquirePrPreviewLock() {
-    const holderId = getPrPreviewLockHolderId();
-    const lockRef = getLockRef();
-    const now = Date.now();
-
+    ensureServerTimeOffset();
     try {
-        const result = await runTransaction(lockRef, (current) => {
-            if (
-                !canClaimPrPreviewLock(
-                    current,
-                    holderId,
-                    now,
-                    PR_PREVIEW_LOCK_STALE_MS,
-                )
-            ) {
-                return;
+        for (let attempt = 0; attempt < BUSY_RETRY_ATTEMPTS; attempt += 1) {
+            const result = await attemptAcquireOnce();
+            if (result.ok) return result;
+            if (attempt < BUSY_RETRY_ATTEMPTS - 1) {
+                await sleep(BUSY_RETRY_DELAY_MS);
+            } else {
+                return result;
             }
-            return {
-                holderId,
-                heldAt:
-                    current && String(current.holderId) === String(holderId)
-                        ? current.heldAt || now
-                        : now,
-                renewedAt: now,
-            };
-        });
-
-        if (!result.committed) {
-            return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
         }
-
-        const value =
-            result.snapshot && typeof result.snapshot.val === "function"
-                ? result.snapshot.val()
-                : null;
-        if (!value || String(value.holderId) !== String(holderId)) {
-            return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
-        }
-
-        heldByUs = true;
-        await configureDisconnectHook();
-        startHeartbeat();
-        return { ok: true };
+        return { ok: false, message: PR_PREVIEW_BUSY_MESSAGE };
     } catch (err) {
         // Fail open on transport/rules errors so a Firebase outage (or undeployed
         // rules) does not freeze every P&R station. Busy is only returned when
@@ -186,57 +299,6 @@ export async function acquirePrPreviewLock() {
         stopHeartbeat();
         return { ok: true };
     }
-}
-
-/**
- * Release the P&R preview lock if this browser session owns it in Firebase.
- * Uses the session holder id (not only the in-memory flag) so reloads / print
- * races cannot leave a stuck busy lock behind.
- */
-export async function releasePrPreviewLockIfHeld() {
-    releaseEpoch += 1;
-    stopHeartbeat();
-    heldByUs = false;
-    const holderId = getPrPreviewLockHolderId();
-    const lockRef = getLockRef();
-    await cancelDisconnectHook();
-    try {
-        const result = await runTransaction(lockRef, (current) => {
-            if (!current || String(current.holderId) !== String(holderId)) {
-                return;
-            }
-            return null;
-        });
-        // Fallback: if the transaction could not commit but we still own it, remove.
-        if (!result.committed) {
-            const value =
-                result.snapshot && typeof result.snapshot.val === "function"
-                    ? result.snapshot.val()
-                    : null;
-            if (value && String(value.holderId) === String(holderId)) {
-                await remove(lockRef);
-            }
-        }
-    } catch (err) {
-        console.warn("P&R preview lock release failed", err);
-        try {
-            const snap = await get(lockRef);
-            const value = snap.exists() ? snap.val() : null;
-            if (value && String(value.holderId) === String(holderId)) {
-                await remove(lockRef);
-            }
-        } catch (removeErr) {
-            console.warn("P&R preview lock remove fallback failed", removeErr);
-        }
-    }
-}
-
-/**
- * Clear a leftover lock from a previous page life-cycle for this session.
- * Safe to call on boot / source routing — only deletes if we still own it.
- */
-export async function clearOwnPrPreviewLockOnStartup() {
-    await releasePrPreviewLockIfHeld();
 }
 
 /**
