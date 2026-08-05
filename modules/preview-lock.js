@@ -175,6 +175,13 @@ export async function releasePrPreviewLockIfHeld() {
     const holderId = getPrPreviewLockHolderId();
     const lockRef = getLockRef();
     try {
+        // Free any unused reserved box number before dropping the station lock.
+        const reservation = await import("./sequence-reservation.js");
+        await reservation.releaseAbandonedPrReservation();
+    } catch (err) {
+        console.warn("P&R reservation release during lock release failed", err);
+    }
+    try {
         const value = await readLockValue();
         if (!value) {
             await cancelDisconnectHook();
