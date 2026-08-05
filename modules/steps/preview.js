@@ -1,9 +1,5 @@
 import { state, showScreen } from "../state.js";
-import {
-    generateUnitNumberFromFirebase,
-    generateCoperionUnitNumberFromFirebase,
-    generateCompoundBagsUnitNumberFromFirebase,
-} from "../utils/generators.js";
+import { generateCoperionUnitNumberFromFirebase } from "../utils/generators.js";
 import { formatLocalDayKey } from "../utils/label-rollover.js";
 import { lbToKg } from "../utils/format.js";
 import {
@@ -25,6 +21,11 @@ import {
     enterPreviewWithLock,
     releasePrPreviewLockIfHeld,
 } from "../preview-lock.js";
+import {
+    commitPrReservation,
+    getActiveReservation,
+    reserveUnitNumberForPreview,
+} from "../sequence-reservation.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -224,15 +225,13 @@ export function initPreviewStep() {
         // Always release the P&R preview lock when leaving this flow so other
         // stations are not stuck on "One station currently busy".
         try {
-            // Single station: use the preview number from printed records.
+            // Use the reserved preview number (claimed when entering Preview).
             await refreshUnitNumberIfNeeded();
             renderPreview();
             await openPrintDialog(getDesiredPrintCopies());
             try {
                 await appendLogRecord();
                 appendHistoryRecord();
-                const group = state.activeGroup;
-                const letter = group ? state.source[group] : undefined;
                 // Save snapshot of what was printed for reprint
                 const printedAt = new Date().toISOString();
                 state.lastPrinted = buildPrintedSnapshotFromState(
@@ -240,19 +239,8 @@ export function initPreviewStep() {
                     printedAt,
                 );
                 state.reprintAvailable = true;
-                // Prepare next displayed number by reading from Firebase
-                try {
-                    const next = await getNextUnitNumberForPreview(
-                        group,
-                        letter,
-                    );
-                    state.unitNumber = next;
-                } catch (e) {
-                    console.warn(
-                        "Failed to refresh next unit number from Firebase",
-                        e,
-                    );
-                }
+                // Keep the reserved suffix consumed so the next station gets N+1.
+                commitPrReservation();
             } catch (err) {
                 console.error("Log append failed after print", err);
                 alert("Saving log failed after printing.");
@@ -260,6 +248,7 @@ export function initPreviewStep() {
                 renderPreview();
             }
         } finally {
+            // If print/log failed, lock release frees the reservation for reuse.
             await releasePrPreviewLockIfHeld();
             window.location.reload();
         }
@@ -360,12 +349,14 @@ export function initPreviewStep() {
     async function getNextUnitNumberForPreview(group, letter) {
         if (state.isCoperion)
             return await generateCoperionUnitNumberFromFirebase();
-        if (isCompoundBagsContext(group, state.bigCode))
-            return await generateCompoundBagsUnitNumberFromFirebase(
-                group,
-                letter,
-            );
-        return await generateUnitNumberFromFirebase(group, letter);
+        // P&R / BAGS: atomically reserve so another station cannot show the same suffix.
+        const key = getUnitNumberContextKey();
+        return await reserveUnitNumberForPreview({
+            group,
+            letter,
+            product: state.bigCode,
+            contextKey: key,
+        });
     }
 
     function getUnitNumberContextKey() {
@@ -393,9 +384,13 @@ export function initPreviewStep() {
             state.__unitNumberContextKey = key;
             return;
         }
+        const hasMatchingReservation =
+            state.isCoperion ||
+            getActiveReservation()?.contextKey === key;
         if (
             !force &&
             state.__unitNumberContextKey === key &&
+            hasMatchingReservation &&
             isUsableUnitNumberForCurrentContext(
                 state.unitNumber,
                 group,
