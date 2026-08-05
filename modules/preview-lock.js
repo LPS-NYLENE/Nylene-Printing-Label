@@ -220,7 +220,11 @@ export async function releasePrPreviewLockIfHeld() {
     } catch (err) {
         console.warn("P&R preview lock release failed", err);
         try {
-            await remove(lockRef);
+            const snap = await get(lockRef);
+            const value = snap.exists() ? snap.val() : null;
+            if (value && String(value.holderId) === String(holderId)) {
+                await remove(lockRef);
+            }
         } catch (removeErr) {
             console.warn("P&R preview lock remove fallback failed", removeErr);
         }
