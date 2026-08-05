@@ -288,8 +288,28 @@ export function initWeightsStep() {
         });
 
     const preview = document.getElementById("previewBtn");
+    let previewInFlight = false;
+
+    function setPreviewButtonLoading(isLoading) {
+        if (!preview) return;
+        if (isLoading) {
+            if (!preview.dataset.defaultLabel) {
+                preview.dataset.defaultLabel = preview.textContent || "Preview";
+            }
+            preview.disabled = true;
+            preview.setAttribute("aria-busy", "true");
+            preview.innerHTML =
+                '<span class="btn-loading-label"><span class="btn-spinner" aria-hidden="true"></span><span>Checking...</span></span>';
+            return;
+        }
+        preview.disabled = false;
+        preview.removeAttribute("aria-busy");
+        preview.textContent = preview.dataset.defaultLabel || "Preview";
+    }
+
     if (preview)
         preview.addEventListener("click", async () => {
+            if (previewInFlight || preview.disabled) return;
             syncNetWeightMode();
             const missingField = findFirstEmptyWeightInput();
             if (missingField) {
@@ -311,7 +331,8 @@ export function initWeightsStep() {
                 return;
             }
             clearWeightsError();
-            preview.disabled = true;
+            previewInFlight = true;
+            setPreviewButtonLoading(true);
             try {
                 const entered = await enterPreviewWithLock({
                     isCoperion: state.isCoperion,
@@ -322,7 +343,8 @@ export function initWeightsStep() {
                 }
                 document.dispatchEvent(new CustomEvent("updatePreview"));
             } finally {
-                preview.disabled = false;
+                previewInFlight = false;
+                setPreviewButtonLoading(false);
             }
         });
 }
