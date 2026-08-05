@@ -1,18 +1,18 @@
-export const PR_PRINT_BUSY_MESSAGE =
+export const PR_PREVIEW_BUSY_MESSAGE =
     "One station is currently busy. Please wait...";
 
 /** Max age of a lock heartbeat before another station may take over. */
-export const PR_PRINT_LOCK_STALE_MS = 20 * 1000;
+export const PR_PREVIEW_LOCK_STALE_MS = 20 * 1000;
 
 /**
  * @param {{ holderId?: string, renewedAt?: number, heldAt?: number } | null | undefined} current
  * @param {number} nowMs
  * @param {number} [staleMs]
  */
-export function isPrPrintLockStale(
+export function isPrPreviewLockStale(
     current,
     nowMs,
-    staleMs = PR_PRINT_LOCK_STALE_MS,
+    staleMs = PR_PREVIEW_LOCK_STALE_MS,
 ) {
     if (!current || !current.holderId) return true;
     const renewedAt = Number(current.renewedAt || current.heldAt || 0);
@@ -21,19 +21,19 @@ export function isPrPrintLockStale(
 }
 
 /**
- * Decide whether `holderId` may claim the P&R print lock.
+ * Decide whether `holderId` may claim the P&R preview lock.
  * @param {{ holderId?: string, renewedAt?: number, heldAt?: number } | null | undefined} current
  * @param {string} holderId
  * @param {number} nowMs
  * @param {number} [staleMs]
  */
-export function canClaimPrPrintLock(
+export function canClaimPrPreviewLock(
     current,
     holderId,
     nowMs,
-    staleMs = PR_PRINT_LOCK_STALE_MS,
+    staleMs = PR_PREVIEW_LOCK_STALE_MS,
 ) {
     if (!current || !current.holderId) return true;
     if (String(current.holderId) === String(holderId)) return true;
-    return isPrPrintLockStale(current, nowMs, staleMs);
+    return isPrPreviewLockStale(current, nowMs, staleMs);
 }
