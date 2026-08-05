@@ -212,9 +212,9 @@ export function initPreviewStep() {
         state.reissueOriginalUnit = previous || unit;
         state.reissueFlowType = "new";
 
-        const entered = await enterPreviewWithLock({ isCoperion: false });
-        if (!entered.ok) {
-            alert(entered.message);
+        const previewEntry = await enterPreviewWithLock({ isCoperion: false });
+        if (!previewEntry.ok) {
+            alert(previewEntry.message);
             return;
         }
         document.dispatchEvent(new CustomEvent("updatePreview"));
