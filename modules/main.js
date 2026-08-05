@@ -63,20 +63,15 @@ async function bootstrap() {
 bootstrap();
 
 function routeAfterLogin() {
-    let lastFlow = localStorage.getItem("last_flow_v1") || "pr";
-    // Legacy compound-only logins map back to P&R on one computer.
-    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
-        lastFlow = "pr";
-        localStorage.setItem("last_flow_v1", "pr");
-    }
+    const lastFlow = localStorage.getItem("last_flow_v1") || "pr";
     if (lastFlow === "cop") {
         state.isCoperion = true;
         showScreen("coperion");
         document.dispatchEvent(new CustomEvent("enterCoperion"));
         return;
     }
+    // pr | compound-a | compound-b → filtered source screen
     state.isCoperion = false;
-    // P&R → Silo / Dryer / Compound source screen
     showScreen("source");
     document.dispatchEvent(new CustomEvent("configureSourceView"));
 }
