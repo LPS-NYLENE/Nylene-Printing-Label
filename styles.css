@@ -299,17 +299,12 @@ body {
     letter-spacing: 0.02em;
 }
 
-/* Right-side vertical barcode column */
-.label-barcode-col {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+.label-qr {
+    margin-top: 8px;
 }
-.label-barcode-col svg {
-    transform: rotate(90deg);
-    transform-origin: center;
-    width: 560px;
+.label-qr svg {
+    display: block;
+    width: 120px;
     height: 120px;
 }
 
@@ -450,6 +445,10 @@ body {
         height: 5in;
         margin: 0 auto;
         box-shadow: none;
+    }
+    .label-qr svg {
+        width: 1in;
+        height: 1in;
     }
 
     /* Show the duplicated copy only during print and force a page break
