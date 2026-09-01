@@ -21,6 +21,7 @@ export const PR_DEFAULT_PRODUCT = "BLANK";
 export const PR_PRODUCT_CHOICES = dedupeStable([
     "CSDN-INT",
     "BS700D",
+    "BS700DFOIL",
     "BS640T",
     "BS640A",
     "BS640AFOIL",

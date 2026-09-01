@@ -10,9 +10,12 @@ import {
     promptForLotNumber,
     promptForPassword,
 } from "../utils/operator-prompts.js";
+import {
+    enterPreviewWithLock,
+    notifyPreviewBusyAndReload,
+} from "../preview-lock.js";
 
 const REISSUE_FLAG = "RI";
-const PASSWORD_EXPECTED = "Nylene2026!";
 const COPERION_PREFIX = "EA";
 
 function setFromRecord(record) {
@@ -201,14 +204,19 @@ export function initReissueNewFlow() {
         setError("");
         const record = await findLatestPrintRecordByUnit(unit);
         if (record) {
-            // Existing label: no password required, reissue directly.
             setFromRecord(record);
             state.reissueFlag = REISSUE_FLAG;
             state.reissueOriginalUnit = normalizeUnitNumber(record.unitNumber);
             state.reissueFlowType = "existing";
+            const entered = await enterPreviewWithLock({
+                isCoperion: state.isCoperion,
+            });
+            if (!entered.ok) {
+                notifyPreviewBusyAndReload(entered.message);
+                return;
+            }
             closeModal();
             document.dispatchEvent(new CustomEvent("updatePreview"));
-            showScreen("preview");
             return;
         }
 
@@ -220,12 +228,7 @@ export function initReissueNewFlow() {
         });
         if (!ok) return;
 
-        const authed = await promptForPassword({
-            title: "Enter password",
-            expected: PASSWORD_EXPECTED,
-        });
-        if (!authed) return;
-
+        // Password was already collected when opening Reissue.
         await startNewLabelFlow(unit);
     }
 
@@ -254,9 +257,14 @@ export function initReissueNewFlow() {
     }
 
     buttons.forEach((btn) => {
-        btn.addEventListener("click", () =>
-            openModal(btn.id === "btnReissueNewCoperion"),
-        );
+        btn.addEventListener("click", async () => {
+            // Same gate as Manual Entry — require password before any Reissue UI/logic.
+            const authed = await promptForPassword({
+                title: "Enter password",
+            });
+            if (!authed) return;
+            openModal(btn.id === "btnReissueNewCoperion");
+        });
     });
     if (clearBtn)
         clearBtn.addEventListener("click", () => {

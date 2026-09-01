@@ -21,6 +21,11 @@ import { splitProductDisplayLines } from "../utils/product-display.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
+import {
+    enterPreviewWithLock,
+    notifyPreviewBusyAndReload,
+    releasePrPreviewLockIfHeld,
+} from "../preview-lock.js";
 
 export function initPreviewStep() {
     document.addEventListener("updatePreview", () => {
@@ -208,40 +213,40 @@ export function initPreviewStep() {
         state.reissueOriginalUnit = previous || unit;
         state.reissueFlowType = "new";
 
+        const previewEntry = await enterPreviewWithLock({ isCoperion: false });
+        if (!previewEntry.ok) {
+            notifyPreviewBusyAndReload(previewEntry.message);
+            return;
+        }
         document.dispatchEvent(new CustomEvent("updatePreview"));
-        showScreen("preview");
     }
 
     async function handleInitialPrintFlow() {
-        // Single station: use the preview number from printed records.
-        await refreshUnitNumberIfNeeded();
-        renderPreview();
-        await openPrintDialog(getDesiredPrintCopies());
+        // Always release the P&R preview lock when leaving this flow so other
+        // stations are not stuck on the busy wait.
         try {
-            await appendLogRecord();
-            appendHistoryRecord();
-            const group = state.activeGroup;
-            const letter = group ? state.source[group] : undefined;
-            // Save snapshot of what was printed for reprint
-            const printedAt = new Date().toISOString();
-            state.lastPrinted = buildPrintedSnapshotFromState(state, printedAt);
-            state.reprintAvailable = true;
-            // Prepare next displayed number by reading from Firebase
-            try {
-                const next = await getNextUnitNumberForPreview(group, letter);
-                state.unitNumber = next;
-            } catch (e) {
-                console.warn(
-                    "Failed to refresh next unit number from Firebase",
-                    e,
-                );
-            }
-        } catch (err) {
-            console.error("Log append failed after print", err);
-            alert("Saving log failed after printing.");
-        } finally {
+            // Refresh from printed history right before printing (no reservation).
+            await refreshUnitNumberIfNeeded(true);
             renderPreview();
-            // Reload the app after printing completes
+            await openPrintDialog(getDesiredPrintCopies());
+            try {
+                await appendLogRecord();
+                appendHistoryRecord();
+                // Save snapshot of what was printed for reprint
+                const printedAt = new Date().toISOString();
+                state.lastPrinted = buildPrintedSnapshotFromState(
+                    state,
+                    printedAt,
+                );
+                state.reprintAvailable = true;
+            } catch (err) {
+                console.error("Log append failed after print", err);
+                alert("Saving log failed after printing.");
+            } finally {
+                renderPreview();
+            }
+        } finally {
+            await releasePrPreviewLockIfHeld();
             window.location.reload();
         }
     }
@@ -283,9 +288,13 @@ export function initPreviewStep() {
             state.previewTimestamp = previous.previewTimestamp;
             renderPreview();
         }
-        if (printError) throw printError;
-        state.reprintAvailable = false;
-        window.location.reload();
+        try {
+            if (printError) throw printError;
+            state.reprintAvailable = false;
+        } finally {
+            await releasePrPreviewLockIfHeld();
+            window.location.reload();
+        }
     }
 
     const openDbBtn = document.getElementById("openLabelDb");
@@ -391,7 +400,9 @@ export function initPreviewStep() {
 
     async function handleUpdatePreview() {
         try {
-            await refreshUnitNumberIfNeeded();
+            // Always re-read from printed history when opening/updating preview
+            // so stations never keep a stale estimated suffix.
+            await refreshUnitNumberIfNeeded(true);
         } catch (e) {
             console.warn("Failed to refresh unit number for preview", e);
         }

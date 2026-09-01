@@ -30,8 +30,9 @@ export const state = {
     reissueOriginalUnit: null,
     // Distinguish between existing-label reissue vs new-box reissue flows.
     // - null: not in a reissue flow
-    // - "existing": reissue an existing label (password not required)
-    // - "new": create/reissue a label for a lot not yet in system (password required)
+    // - "existing": reissue an existing label
+    // - "new": create/reissue a label for a lot not yet in system
+    // Password is required when opening Manual Entry / Reissue from the source screen.
     reissueFlowType: null,
     // Prevents preview from overwriting a newly generated reissue unit number
     lockUnitNumberOnce: false,
@@ -48,9 +49,21 @@ export const screens = {
 };
 
 export function showScreen(name) {
+    const wasOnPreview = Boolean(
+        screens.preview && screens.preview.classList.contains("active"),
+    );
     Object.values(screens).forEach((s) => s && s.classList.remove("active"));
     const el = screens[name];
     if (el) el.classList.add("active");
+
+    // P&R preview is exclusively locked while a station is on Preview (or Label DB).
+    // Leaving that session releases the shared lock for other computers.
+    const staysInPreviewSession = name === "preview" || name === "labeldb";
+    if (wasOnPreview && !staysInPreviewSession) {
+        void import("./preview-lock.js")
+            .then((m) => m.releasePrPreviewLockIfHeld())
+            .catch(() => {});
+    }
 }
 
 export const BLANK_PRODUCT_LABEL = "BLANK";

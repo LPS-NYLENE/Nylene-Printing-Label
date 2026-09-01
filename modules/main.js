@@ -63,20 +63,20 @@ async function bootstrap() {
 bootstrap();
 
 function routeAfterLogin() {
-    let lastFlow = localStorage.getItem("last_flow_v1") || "pr";
-    // Legacy compound-only logins map back to P&R on one computer.
-    if (lastFlow === "compound-a" || lastFlow === "compound-b") {
-        lastFlow = "pr";
-        localStorage.setItem("last_flow_v1", "pr");
-    }
+    const lastFlow = localStorage.getItem("last_flow_v1") || "pr";
     if (lastFlow === "cop") {
         state.isCoperion = true;
         showScreen("coperion");
         document.dispatchEvent(new CustomEvent("enterCoperion"));
         return;
     }
+    // Clear any leftover P&R preview lock from a previous page life-cycle
+    // (print reload / crashed tab) so other stations are not stuck busy.
+    void import("./preview-lock.js")
+        .then((m) => m.clearOwnPrPreviewLockOnStartup())
+        .catch(() => {});
+    // pr | compound-a | compound-b → filtered source screen
     state.isCoperion = false;
-    // P&R → Silo / Dryer / Compound source screen
     showScreen("source");
     document.dispatchEvent(new CustomEvent("configureSourceView"));
 }

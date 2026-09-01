@@ -124,12 +124,38 @@ body {
 .btn.tertiary {
     background: var(--tertiary);
 }
+.btn:disabled,
+.btn[aria-busy="true"] {
+    cursor: not-allowed;
+    opacity: 0.72;
+    pointer-events: none;
+}
 .btn:focus-visible {
     outline: 3px solid var(--focus);
     outline-offset: 2px;
 }
 .btn.selected {
     box-shadow: 0 0 0 3px var(--focus) inset;
+}
+.btn-loading-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.btn-spinner {
+    width: 1em;
+    height: 1em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: btn-spin 0.7s linear infinite;
+    flex: 0 0 auto;
+}
+@keyframes btn-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .pill.small {
