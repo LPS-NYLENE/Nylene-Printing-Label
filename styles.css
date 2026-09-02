@@ -378,6 +378,7 @@ body {
 
 .big-code.is-multiline {
     font-size: 60px;
+    font-weight: 600;
     line-height: 1;
     letter-spacing: 2px;
 }
@@ -415,7 +416,7 @@ body {
     display: flex;
     flex-direction: column; /* stack logo and text */
     align-items: flex-start; /* keep them left-aligned */
-    margin-bottom: 15px;
+    margin-bottom: 5px;
 }
 
 .label-logo img {
