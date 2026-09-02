@@ -18,6 +18,7 @@ import {
 } from "../utils/unit-number.js";
 import { buildPrintedSnapshotFromState } from "../utils/reprint-snapshot.js";
 import { splitProductDisplayLines } from "../utils/product-display.js";
+import { drawQrCode } from "../barcode.js";
 
 import { appendLogRecord, bindExcelButton } from "../logs.js";
 import { appendHistoryRecord } from "../history.js";
@@ -477,37 +478,11 @@ export function initPreviewStep() {
                     : "—";
         }
 
-        // Render barcode encoding Box number, Product, and Net weight (LBS)
-        // try {
-        //     const barcodeEl = document.getElementById("labelBarcode");
-        //     if (barcodeEl && window.JsBarcode) {
-        //         const barcodeData = `BOX:${state.unitNumber}|PROD:${
-        //             state.bigCode || ""
-        //         }|NETLB:${Number(state.weights.netLb || 0).toFixed(1)}`;
-        //         window.JsBarcode(barcodeEl, barcodeData, {
-        //             format: "CODE128",
-        //             lineColor: "#000",
-        //             width: 2,
-        //             height: 60,
-        //             displayValue: false,
-        //             margin: 0,
-        //         });
-        //     }
-        // } catch (e) {d
-        //     // Fail silently if barcode cannot render
-        // }
-        const barcodeData = `
-        BOX:${state.unitNumber}|
-        PROD:${state.bigCode || ""}|
-        NETLB:${Number(state.weights.netLb || 0).toFixed(1)}`;
-
-        console.log(barcodeData, "barcodeData");
-
-        JsBarcode("#labelBarcode", `${state.unitNumber}`, {
-            displayValue: false,
-            width: 3,
-            height: 30,
-        });
+        drawQrCode(document.getElementById("labelQr"), state.unitNumber);
+        drawQrCode(
+            document.getElementById("labelNetQr"),
+            Number(state.weights.netLb || 0).toFixed(1),
+        );
 
         // Update the print button label according to mod
         const printBtn = document.getElementById("printBtn");
