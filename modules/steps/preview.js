@@ -414,6 +414,10 @@ export function initPreviewStep() {
         if (!productEl) return;
         productEl.textContent = "";
         const lines = splitProductDisplayLines(productCode);
+        const multiline = lines.length > 1;
+        productEl.classList.toggle("is-multiline", multiline);
+        const wrap = productEl.closest(".big-code");
+        if (wrap) wrap.classList.toggle("is-multiline", multiline);
         lines.forEach((line, index) => {
             if (index > 0) productEl.appendChild(document.createElement("br"));
             productEl.appendChild(document.createTextNode(line));
