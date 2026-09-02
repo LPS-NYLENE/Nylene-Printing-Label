@@ -340,7 +340,9 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    /* margin-top: auto; */
+    margin-top: auto;
+    flex-shrink: 0;
+    min-height: 120px;
 }
 .label-qr svg {
     display: block;
@@ -369,6 +371,12 @@ body {
     letter-spacing: 4px;
     text-align: left;
     width: 1px;
+}
+
+.big-code.is-multiline {
+    font-size: 42px;
+    line-height: 1.05;
+    letter-spacing: 2px;
 }
 
 .big-code-1 {
@@ -489,6 +497,13 @@ body {
     .label-qr svg {
         width: 1in;
         height: 1in;
+    }
+    .label-qr-row {
+        min-height: 1in;
+    }
+    .big-code.is-multiline {
+        font-size: 36px;
+        line-height: 1;
     }
 
     /* Show the duplicated copy only during print and force a page break
