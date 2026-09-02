@@ -479,6 +479,10 @@ export function initPreviewStep() {
         }
 
         drawQrCode(document.getElementById("labelQr"), state.unitNumber);
+        drawQrCode(
+            document.getElementById("labelNetQr"),
+            Number(state.weights.netLb || 0).toFixed(1),
+        );
 
         // Update the print button label according to mod
         const printBtn = document.getElementById("printBtn");

@@ -317,6 +317,8 @@ body {
     position: relative;
     width: 100%;
     height: 600px;
+    display: flex;
+    flex-direction: column;
     /* display: grid; */
     /* grid-template-columns: 1fr 140px; */
     gap: 10px;
@@ -334,8 +336,11 @@ body {
     letter-spacing: 0.02em;
 }
 
-.label-qr {
-    margin-top: 8px;
+.label-qr-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: auto;
 }
 .label-qr svg {
     display: block;
