@@ -317,6 +317,8 @@ body {
     position: relative;
     width: 100%;
     height: 600px;
+    display: flex;
+    flex-direction: column;
     /* display: grid; */
     /* grid-template-columns: 1fr 140px; */
     gap: 10px;
@@ -334,17 +336,15 @@ body {
     letter-spacing: 0.02em;
 }
 
-/* Right-side vertical barcode column */
-.label-barcode-col {
+.label-qr-row {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+    justify-content: space-between;
+    align-items: flex-end;
+    /* margin-top: auto; */
 }
-.label-barcode-col svg {
-    transform: rotate(90deg);
-    transform-origin: center;
-    width: 560px;
+.label-qr svg {
+    display: block;
+    width: 120px;
     height: 120px;
 }
 
@@ -485,6 +485,10 @@ body {
         height: 5in;
         margin: 0 auto;
         box-shadow: none;
+    }
+    .label-qr svg {
+        width: 1in;
+        height: 1in;
     }
 
     /* Show the duplicated copy only during print and force a page break
