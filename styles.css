@@ -340,7 +340,12 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    /* margin-top: auto; */
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    flex-shrink: 0;
+    min-height: 120px;
 }
 .label-qr svg {
     display: block;
@@ -371,6 +376,12 @@ body {
     width: 1px;
 }
 
+.big-code.is-multiline {
+    font-size: 38px;
+    line-height: 1;
+    letter-spacing: 2px;
+}
+
 .big-code-1 {
     font-size: 76px;
     font-weight: 600;
@@ -397,6 +408,7 @@ body {
     grid-template-columns: 1fr 1fr; /* left column + right colum */
     gap: 20px;
     align-items: start;
+    padding-bottom: 130px;
 }
 
 .label-logo {
@@ -489,6 +501,19 @@ body {
     .label-qr svg {
         width: 1in;
         height: 1in;
+    }
+    .label-qr-row {
+        min-height: 1in;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+    }
+    .label-main {
+        padding-bottom: 1.15in;
+    }
+    .big-code.is-multiline {
+        font-size: 32px;
+        line-height: 1;
     }
 
     /* Show the duplicated copy only during print and force a page break
